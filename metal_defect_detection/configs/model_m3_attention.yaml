@@ -1,0 +1,32 @@
+# Model Ablation Variant M3: Baseline + Multi-Scale Lightweight Attention
+# Description: Evaluates H2 hypothesis - impact of ECA channel attention and spatial attention without CLAHE.
+
+model:
+  name: "M3_Baseline_Attention"
+  architecture: "yolov5s_attention"
+  num_classes: 6
+  in_channels: 3
+  
+  preprocessing:
+    use_clahe: false
+    use_bilateral: false
+    
+  attention:
+    use_eca: true
+    use_spatial: true
+    eca_gamma: 2
+    eca_b: 1
+    spatial_kernel_size: 7
+    
+  anchors:
+    - [[29, 38], [34, 76], [79, 56]]       # P3/8 (small / compact defects)
+    - [[33, 185], [57, 122], [178, 51]]    # P4/16 (elongated scratches / horizontal scale)
+    - [[127, 80], [95, 182], [179, 186]]  # P5/32 (large defect clusters & patches)
+
+training:
+  epochs: 50
+  batch_size: 16
+  learning_rate: 0.001
+  weight_decay: 0.0005
+  optimizer: "AdamW"
+  lr_scheduler: "cosine"

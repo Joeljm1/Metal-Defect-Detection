@@ -1,0 +1,38 @@
+[project]
+name = "metal-defect-detection"
+version = "0.1.0"
+description = "Computer Vision Based Detection of Surface Defects in Metal Components (CSE411 Task 4)"
+readme = "README.md"
+requires-python = ">=3.11"
+authors = [
+    { name = "Joel Joseph Mathews (2023BCS0061)" },
+    { name = "Karthik Das P (2023BCS0058)" },
+    { name = "Vivek Binod (2023BCS0043)" },
+    { name = "Vibhaas Nirantar Srivastava (2023BCS0037)" },
+]
+dependencies = [
+    "torch>=2.2.0",
+    "torchvision>=0.17.0",
+    "opencv-python-headless>=4.8.0",
+    "numpy>=1.24.0",
+    "matplotlib>=3.7.0",
+    "pyyaml>=6.0",
+    "tqdm>=4.66.0",
+    "pandas>=2.0.0",
+    "seaborn>=0.12.0",
+    "scipy>=1.11.0",
+    "rich>=13.0.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0.0",
+    "pytest-cov>=4.1.0",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src"]

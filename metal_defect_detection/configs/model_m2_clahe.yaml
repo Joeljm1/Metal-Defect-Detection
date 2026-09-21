@@ -1,0 +1,34 @@
+# Model Ablation Variant M2: Baseline + Illumination & Contrast Preprocessing
+# Description: Evaluates H1 hypothesis - impact of CLAHE and bilateral filtering without attention.
+
+model:
+  name: "M2_Baseline_Preprocessing"
+  architecture: "yolov5s_clahe"
+  num_classes: 6
+  in_channels: 3
+  
+  preprocessing:
+    use_clahe: true
+    use_bilateral: true
+    clahe_clip_limit: 2.0
+    clahe_tile_grid: [8, 8]
+    bilateral_d: 5
+    bilateral_sigma_color: 50.0
+    bilateral_sigma_space: 50.0
+    
+  attention:
+    use_eca: false
+    use_spatial: false
+    
+  anchors:
+    - [[29, 38], [34, 76], [79, 56]]       # P3/8 (small / compact defects)
+    - [[33, 185], [57, 122], [178, 51]]    # P4/16 (elongated scratches / horizontal scale)
+    - [[127, 80], [95, 182], [179, 186]]  # P5/32 (large defect clusters & patches)
+
+training:
+  epochs: 50
+  batch_size: 16
+  learning_rate: 0.001
+  weight_decay: 0.0005
+  optimizer: "AdamW"
+  lr_scheduler: "cosine"

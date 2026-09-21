@@ -1,0 +1,165 @@
+"""
+Model Trainer for Ablation Matrix (M1 - M4).
+"""
+
+from pathlib import Path
+from typing import Dict, Any, Optional
+import time
+import torch
+import torch.nn as nn
+from torch.utils.data import DataLoader
+from tqdm import tqdm
+
+from src.training.loss import ComputeLoss
+from src.models.detector import DefectDetector
+
+
+class Trainer:
+    """
+    Manages model training, validation, and checkpointing for defect detection models.
+    """
+
+    def __init__(
+        self,
+        model: DefectDetector,
+        train_loader: DataLoader,
+        val_loader: DataLoader,
+        device: str = "cuda" if torch.cuda.is_available() else "cpu",
+        learning_rate: float = 1e-3,
+        weight_decay: float = 5e-4,
+        output_dir: str | Path = "checkpoints",
+    ):
+        self.device = torch.device(device)
+        self.model = model.to(self.device)
+        self.train_loader = train_loader
+        self.val_loader = val_loader
+        self.output_dir = Path(output_dir)
+        self.output_dir.mkdir(parents=True, exist_ok=True)
+
+        self.compute_loss = ComputeLoss()
+        self.optimizer = torch.optim.AdamW(
+            self.model.parameters(), lr=learning_rate, weight_decay=weight_decay
+        )
+        self.scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
+            self.optimizer, T_max=50, eta_min=1e-5
+        )
+
+        self.best_loss = float("inf")
+        self.history = {"train_loss": [], "val_loss": []}
+
+    def train_epoch(self, epoch: int, dry_run: bool = False) -> Dict[str, float]:
+        """Runs a single training epoch."""
+        self.model.train()
+        total_loss = 0.0
+        total_box = 0.0
+        total_obj = 0.0
+        total_cls = 0.0
+        steps = 0
+
+        pbar = tqdm(self.train_loader, desc=f"Epoch {epoch:02d} [Train]")
+        for batch_idx, (images, targets, _) in enumerate(pbar):
+            images = images.to(self.device)
+            targets = targets.to(self.device)
+
+            self.optimizer.zero_grad()
+            preds = self.model(images)
+            loss, items = self.compute_loss(preds, targets, self.model)
+
+            loss.backward()
+            nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=10.0)
+            self.optimizer.step()
+
+            total_loss += items["loss_total"]
+            total_box += items["loss_box"]
+            total_obj += items["loss_obj"]
+            total_cls += items["loss_cls"]
+            steps += 1
+
+            pbar.set_postfix({
+                "loss": f"{items['loss_total']:.4f}",
+                "box": f"{items['loss_box']:.4f}",
+                "obj": f"{items['loss_obj']:.4f}",
+            })
+
+            if dry_run and batch_idx >= 2:
+                break
+
+        return {
+            "loss": total_loss / max(1, steps),
+            "loss_total": total_loss / max(1, steps),
+            "loss_box": total_box / max(1, steps),
+            "loss_obj": total_obj / max(1, steps),
+            "loss_cls": total_cls / max(1, steps),
+        }
+
+    def validate(self, dry_run: bool = False, epoch: Optional[int] = None) -> Dict[str, float]:
+        """Runs validation loss calculation in eval mode to prevent BatchNorm contamination."""
+        self.model.eval()
+        total_loss = 0.0
+        steps = 0
+
+        with torch.no_grad():
+            for batch_idx, (images, targets, _) in enumerate(self.val_loader):
+                images = images.to(self.device)
+                targets = targets.to(self.device)
+
+                preds = self.model(images)
+                raw_preds = preds[1] if isinstance(preds, tuple) else preds
+                loss, items = self.compute_loss(raw_preds, targets, self.model)
+
+                total_loss += items["loss_total"]
+                steps += 1
+
+                if dry_run and batch_idx >= 2:
+                    break
+
+        avg_loss = total_loss / max(1, steps)
+        return {"loss": avg_loss, "val_loss": avg_loss}
+
+    def save_checkpoint(self, epoch: int, val_loss: float, is_best: bool = False) -> Path:
+        """Saves model checkpoint."""
+        ckpt_name = f"{self.model.variant_name}_best.pt" if is_best else f"{self.model.variant_name}_epoch_{epoch}.pt"
+        ckpt_path = self.output_dir / ckpt_name
+        torch.save({
+            "epoch": epoch,
+            "model_state": self.model.state_dict(),
+            "optimizer_state": self.optimizer.state_dict(),
+            "val_loss": val_loss,
+            "variant": self.model.variant_name,
+        }, ckpt_path)
+        return ckpt_path
+
+    def fit(self, epochs: int = 10, dry_run: bool = False) -> Dict[str, Any]:
+        """Trains for the specified number of epochs."""
+        # Dynamically align CosineAnnealingLR cycle to total epochs
+        self.scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
+            self.optimizer, T_max=max(1, epochs), eta_min=1e-5
+        )
+        print(f"Starting training: {self.model.variant_name} on {self.device} (epochs={epochs}, dry_run={dry_run})")
+        start_time = time.time()
+
+        for epoch in range(1, epochs + 1):
+            train_metrics = self.train_epoch(epoch, dry_run=dry_run)
+            val_metrics = self.validate(dry_run=dry_run)
+            self.scheduler.step()
+
+            self.history["train_loss"].append(train_metrics["loss_total"])
+            self.history["val_loss"].append(val_metrics["val_loss"])
+
+            print(
+                f"Epoch {epoch:02d}/{epochs:02d} - Train Loss: {train_metrics['loss_total']:.4f}, "
+                f"Val Loss: {val_metrics['val_loss']:.4f}"
+            )
+
+            # Checkpoint
+            if val_metrics["val_loss"] < self.best_loss and not dry_run:
+                self.best_loss = val_metrics["val_loss"]
+                ckpt_path = self.save_checkpoint(epoch, self.best_loss, is_best=True)
+                print(f" Saved new best model to {ckpt_path}")
+
+            if dry_run:
+                break
+
+        elapsed = time.time() - start_time
+        print(f"Training completed in {elapsed:.2f}s")
+        return {"history": self.history, "elapsed_seconds": elapsed}

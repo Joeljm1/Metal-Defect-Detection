@@ -1,0 +1,43 @@
+# NEU-DET (Northeastern University Surface Defect Detection) Dataset Configuration
+name: "NEU-DET"
+description: "Steel surface defect detection dataset with 6 defect categories"
+
+path: "data/NEU-DET"
+train_images: "data/NEU-DET/train/images"
+train_labels: "data/NEU-DET/train/labels"
+test_images: "data/NEU-DET/test/images"
+test_labels: "data/NEU-DET/test/labels"
+
+# Preprocessed dataset destination
+preprocessed_dir: "data/preprocessed"
+
+# Class metadata
+num_classes: 6
+classes:
+  - crazing
+  - inclusion
+  - patches
+  - pitted_surface
+  - rolled-in_scale
+  - scratches
+
+# Image specification
+image_size: [200, 200]
+channels: 3
+
+# Generalization benchmark
+generalization_dataset:
+  name: "GC10-DET"
+  description: "Held-out metallic surface defect dataset for cross-dataset evaluation (H4)"
+  num_classes: 10
+  classes:
+    - punch_hole
+    - welding_line
+    - crescent_gap
+    - water_spot
+    - oil_spot
+    - silk_spot
+    - inclusion
+    - rolled_pit
+    - crease
+    - waist_folding

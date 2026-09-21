@@ -1,0 +1,21 @@
+# Preprocessing & Enhancement Configuration (Task 3 Methodology)
+# Objectives: Compensate for uneven illumination, specular glare, and noise while preserving defect edges.
+
+clahe:
+  enabled: true
+  clip_limit: 2.0
+  tile_grid_size: [8, 8]
+  color_space: "LAB"  # Apply CLAHE to L-channel to preserve color fidelity
+
+bilateral_filter:
+  enabled: true
+  diameter: 5          # Pixel neighborhood diameter
+  sigma_color: 50.0    # Filter sigma in color space (larger = wider range of colors blended)
+  sigma_space: 50.0    # Filter sigma in coordinate space (larger = farther pixels influence)
+
+normalization:
+  mode: "rescaling"    # Direct [0.0, 1.0] float tensor scaling (standard for YOLO)
+  scale_factor: 0.00392156862  # 1.0 / 255.0
+  imagenet_mean: [0.485, 0.456, 0.406]  # Reference statistics for transfer learning
+  imagenet_std: [0.229, 0.224, 0.225]
+  target_size: [200, 200]

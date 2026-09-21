@@ -1,0 +1,29 @@
+# Model Ablation Variant M1: Baseline Detector
+# Description: Plain YOLOv5s-style detector without preprocessing or attention modules.
+
+model:
+  name: "M1_Baseline"
+  architecture: "yolov5s_base"
+  num_classes: 6
+  in_channels: 3
+  
+  preprocessing:
+    use_clahe: false
+    use_bilateral: false
+    
+  attention:
+    use_eca: false
+    use_spatial: false
+    
+  anchors:
+    - [[29, 38], [34, 76], [79, 56]]       # P3/8 (small / compact defects)
+    - [[33, 185], [57, 122], [178, 51]]    # P4/16 (elongated scratches / horizontal scale)
+    - [[127, 80], [95, 182], [179, 186]]  # P5/32 (large defect clusters & patches)
+
+training:
+  epochs: 50
+  batch_size: 16
+  learning_rate: 0.001
+  weight_decay: 0.0005
+  optimizer: "AdamW"
+  lr_scheduler: "cosine"
