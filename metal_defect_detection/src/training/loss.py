@@ -25,16 +25,18 @@ class ComputeLoss(nn.Module):
         box_gain: float = 0.05,
         cls_gain: float = 0.5,
         obj_gain: float = 1.0,
+        obj_pos_weight: float = 25.0,
         anchor_threshold: float = 4.0,
     ):
         super().__init__()
         self.box_gain = box_gain
         self.cls_gain = cls_gain
         self.obj_gain = obj_gain
+        self.obj_pos_weight = obj_pos_weight
         self.anchor_threshold = anchor_threshold
 
         self.bce_cls = nn.BCEWithLogitsLoss(reduction="mean")
-        self.bce_obj = nn.BCEWithLogitsLoss(reduction="mean")
+        self.bce_obj = None  # Instantiated with device-specific pos_weight in forward()
 
         # Balance weights for P3, P4, P5
         self.balance = [4.0, 1.0, 0.4]
@@ -66,6 +68,10 @@ class ComputeLoss(nn.Module):
             targets = targets[valid_cls_mask]
 
         device = targets.device if targets.numel() > 0 else predictions[0].device
+        if self.bce_obj is None or self.bce_obj.pos_weight.device != device:
+            pos_weight = torch.tensor([self.obj_pos_weight], device=device)
+            self.bce_obj = nn.BCEWithLogitsLoss(pos_weight=pos_weight, reduction="mean")
+
         lbox = torch.zeros(1, device=device)
         lobj = torch.zeros(1, device=device)
         lcls = torch.zeros(1, device=device)

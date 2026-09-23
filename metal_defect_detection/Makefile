@@ -47,9 +47,19 @@ benchmark:
 evaluate:
 	$(PYTHON) scripts/evaluate.py --checkpoint checkpoints/M4_Proposed_Integrated_best.pt
 
-pdf:
+pdf-task4:
 	typst compile ../CSE411_Project_Task_4_Group_6.typ ../CSE411_Project_Task_4_Group_6.pdf
 	cp ../CSE411_Project_Task_4_Group_6.pdf ./CSE411_Project_Task_4_Group_6.pdf
+
+pdf:
+	typst compile ../CSE411_Project_Task_5_Group_6.typ ../CSE411_Project_Task_5_Group_6.pdf
+	cp ../CSE411_Project_Task_5_Group_6.pdf ./CSE411_Project_Task_5_Group_6.pdf
+
+gradcam:
+	$(PYTHON) scripts/visualize_gradcam.py
+
+train-ablation:
+	$(PYTHON) scripts/train_ablation.py
 
 dry-run: setup-data
 	$(PYTHON) scripts/train.py --model M4 --dry-run --epochs 1
