@@ -21,6 +21,56 @@ from src.models.head import DetectHead
 from src.preprocessing.pipeline import DefectPreprocessor
 from src.utils.box_ops import non_max_suppression
 
+_VARIANT_CFG_FILES = {
+    "m1": "model_m1_baseline.yaml",
+    "m2": "model_m2_clahe.yaml",
+    "m3": "model_m3_attention.yaml",
+    "m4": "model_m4_integrated.yaml",
+}
+
+
+def _resolve_variant(variant: str) -> Tuple[str, str, bool, bool]:
+    """Map a variant name to (config key, display name, use_attention, use_preprocessing)."""
+    v = variant.upper().strip()
+    if "M4" in v or "INTEGRATED" in v:
+        return "m4", "M4_Proposed_Integrated", True, True
+    if "M3" in v or "ATTENTION" in v:
+        return "m3", "M3_Baseline_Attention", True, False
+    if "M2" in v or "CLAHE" in v or "PREPROCESSING" in v:
+        return "m2", "M2_Baseline_Preprocessing", False, True
+    if "M1" in v or "BASELINE" in v:
+        return "m1", "M1_Baseline", False, False
+    raise ValueError(f"Unknown variant '{variant}'. Expected one of: M1, M2, M3, M4")
+
+
+def load_variant_config(variant: str, config_dir: Optional[Union[str, Path]] = None) -> Dict[str, Any]:
+    """
+    Load the YAML configuration for an ablation variant (M1-M4).
+
+    Returns the full config dict (``{}`` if no config file is found). Used both
+    by :meth:`DefectDetector.build_model` (``model:`` section) and the training
+    scripts (``training:`` section).
+    """
+    var_key, _, _, _ = _resolve_variant(variant)
+    search_dirs = []
+    if config_dir:
+        search_dirs.append(Path(config_dir))
+    search_dirs.extend([
+        Path("configs"),
+        Path("../configs"),
+        Path(__file__).resolve().parent.parent.parent / "configs",
+    ])
+
+    for d in search_dirs:
+        p = d / _VARIANT_CFG_FILES[var_key]
+        if p.exists():
+            try:
+                with open(p, "r", encoding="utf-8") as f:
+                    return yaml.safe_load(f) or {}
+            except Exception:
+                pass
+    return {}
+
 
 class DefectDetector(nn.Module):
     """
@@ -111,18 +161,19 @@ class DefectDetector(nn.Module):
         return torch.stack(processed_list, dim=0).to(device)
 
     def forward(
-        self, x: torch.Tensor, apply_preprocessor: bool = False
+        self, x: torch.Tensor
     ) -> List[torch.Tensor] | Tuple[torch.Tensor, List[torch.Tensor]]:
         """
-        Forward pass.
+        Forward pass on a batch of (possibly preprocessed) image tensors.
+
+        Preprocessing is NOT applied here: during training/evaluation the
+        DataLoader applies CLAHE + bilateral filtering (M2/M4), and single-image
+        inference goes through :meth:`predict`, which preprocesses exactly once.
+        This keeps a single preprocessing path and prevents double-filtering.
+
         Args:
             x: Input image tensor (B, 3, H, W) in [0, 1].
-            apply_preprocessor: If True and model uses preprocessing (M2/M4),
-                               runs CLAHE + Bilateral filtering before backbone.
         """
-        if apply_preprocessor and self.use_preprocessing:
-            x = self.preprocess_tensor(x)
-
         features = self.backbone(x)
         fused_features = self.neck(features)
         return self.head(fused_features)
@@ -135,8 +186,11 @@ class DefectDetector(nn.Module):
     ) -> torch.Tensor:
         """
         Standalone end-to-end inference on a single image.
-        Accepts raw uint8 image numpy array or float tensor, applies preprocessing (if M2/M4),
-        runs network, and applies NMS.
+
+        Accepts a raw uint8 numpy image in RGB channel order (convert BGR output
+        of ``cv2.imread`` with ``cv2.cvtColor(img, cv2.COLOR_BGR2RGB)`` first)
+        or a float tensor; applies preprocessing exactly once (if M2/M4), runs
+        the network, and applies NMS.
         """
         self.eval()
         device = next(self.parameters()).device
@@ -156,7 +210,7 @@ class DefectDetector(nn.Module):
             tensor_in = tensor_in.to(device)
 
         with torch.no_grad():
-            decoded, _ = self.forward(tensor_in, apply_preprocessor=False)
+            decoded, _ = self.forward(tensor_in)
             nms_results = non_max_suppression(
                 decoded, conf_thres=conf_thres, iou_thres=iou_thres
             )
@@ -171,60 +225,8 @@ class DefectDetector(nn.Module):
         Factory method to construct ablation models M1, M2, M3, or M4,
         loading parameters from YAML configurations in configs/.
         """
-        v = variant.upper().strip()
-        var_key = "m1"
-        if "M4" in v or "INTEGRATED" in v:
-            var_key = "m4"
-            default_name = "M4_Proposed_Integrated"
-            default_att = True
-            default_prep = True
-        elif "M3" in v or "ATTENTION" in v:
-            var_key = "m3"
-            default_name = "M3_Baseline_Attention"
-            default_att = True
-            default_prep = False
-        elif "M2" in v or "CLAHE" in v or "PREPROCESSING" in v:
-            var_key = "m2"
-            default_name = "M2_Baseline_Preprocessing"
-            default_att = False
-            default_prep = True
-        elif "M1" in v or "BASELINE" in v:
-            var_key = "m1"
-            default_name = "M1_Baseline"
-            default_att = False
-            default_prep = False
-        else:
-            raise ValueError(f"Unknown variant '{variant}'. Expected one of: M1, M2, M3, M4")
-
-        # Resolve config path
-        cfg_files = {
-            "m1": "model_m1_baseline.yaml",
-            "m2": "model_m2_clahe.yaml",
-            "m3": "model_m3_attention.yaml",
-            "m4": "model_m4_integrated.yaml",
-        }
-
-        # Search paths for config
-        search_dirs = []
-        if config_dir:
-            search_dirs.append(Path(config_dir))
-        search_dirs.extend([
-            Path("configs"),
-            Path("../configs"),
-            Path(__file__).resolve().parent.parent.parent / "configs",
-        ])
-
-        cfg_data = {}
-        for d in search_dirs:
-            p = d / cfg_files[var_key]
-            if p.exists():
-                try:
-                    with open(p, "r", encoding="utf-8") as f:
-                        cfg_data = yaml.safe_load(f) or {}
-                    break
-                except Exception:
-                    pass
-
+        _, default_name, default_att, default_prep = _resolve_variant(variant)
+        cfg_data = load_variant_config(variant, config_dir=config_dir)
         m_cfg = cfg_data.get("model", {})
         p_cfg = m_cfg.get("preprocessing", {})
         a_cfg = m_cfg.get("attention", {})

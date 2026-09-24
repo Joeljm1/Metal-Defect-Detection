@@ -7,7 +7,16 @@ import torch
 import numpy as np
 
 from src.dataset.parser import CLASS_NAMES
-from src.utils.box_ops import box_iou
+from src.utils.box_ops import box_iou, non_max_suppression
+
+# Shared evaluation policy (see README "Training & Evaluation Policy"):
+# - NMS prefilters detections at EVAL_CONF_THRES (near zero) so the AP curve
+#   spans the full confidence range.
+# - Precision / Recall / F1 are reported at the fixed operating point
+#   REPORT_CONF_THRES.
+EVAL_CONF_THRES = 0.001
+REPORT_CONF_THRES = 0.25
+IOU_MATCH_THRESHOLD = 0.5
 
 
 def compute_ap(recall: np.ndarray, precision: np.ndarray) -> float:
@@ -33,6 +42,7 @@ def evaluate_detections(
     targets_list: List[torch.Tensor],
     iou_threshold: float = 0.5,
     num_classes: int = 6,
+    report_conf_thres: float = REPORT_CONF_THRES,
 ) -> Dict[str, Any]:
     """
     Evaluate detected bounding boxes against ground truth.
@@ -42,6 +52,8 @@ def evaluate_detections(
         targets_list: List of ground-truth tensors, each (M, 5): [class_id, xmin, ymin, xmax, ymax] (in pixel coords)
         iou_threshold: IoU threshold for a true positive match (default 0.5).
         num_classes: Total defect classes.
+        report_conf_thres: Operating confidence threshold at which precision,
+            recall, and F1 are reported (AP uses the full ranked curve).
         
     Returns:
         dict containing 'precision', 'recall', 'f1', 'map50', and 'per_class' metrics.
@@ -153,8 +165,13 @@ def evaluate_detections(
         ap = compute_ap(rec, prec)
         aps.append(ap)
 
-        final_prec = float(prec[-1]) if len(prec) > 0 else 0.0
-        final_rec = float(rec[-1]) if len(rec) > 0 else 0.0
+        # Precision / Recall / F1 at the fixed operating confidence threshold.
+        # (AP above is computed over the full confidence-ranked curve.)
+        op_mask = conf_arr >= report_conf_thres
+        num_det_op = int(op_mask.sum())
+        tp_op = float(tp_arr[op_mask].sum())
+        final_prec = tp_op / num_det_op if num_det_op > 0 else 0.0
+        final_rec = tp_op / num_gt
         final_f1 = (
             float(2 * final_prec * final_rec / (final_prec + final_rec + 1e-7))
             if (final_prec + final_rec) > 0
@@ -188,3 +205,52 @@ def evaluate_detections(
         "mean_f1": mean_f1,
         "per_class": per_class_metrics,
     }
+
+
+def evaluate_model_on_loader(
+    model: torch.nn.Module,
+    loader,
+    device: torch.device | str,
+    conf_thres: float = EVAL_CONF_THRES,
+    iou_thres: float = 0.45,
+    num_classes: int = 6,
+    report_conf_thres: float = REPORT_CONF_THRES,
+) -> Dict[str, Any]:
+    """
+    Shared evaluation loop: runs the model over a DataLoader, applies NMS, and
+    computes detection metrics (full-curve mAP@0.5 plus P/R/F1 at the operating
+    confidence threshold). Single source of truth for all evaluation scripts.
+    """
+    model.eval()
+    all_preds: List[torch.Tensor] = []
+    all_targets: List[torch.Tensor] = []
+    with torch.no_grad():
+        for images, targets, _ in loader:
+            images = images.to(device)
+            decoded, _ = model(images)
+            nms_preds = non_max_suppression(decoded, conf_thres=conf_thres, iou_thres=iou_thres)
+
+            img_h, img_w = images.shape[2], images.shape[3]
+            for b_idx in range(images.shape[0]):
+                img_targets = targets[targets[:, 0] == b_idx]
+                if img_targets.numel() > 0:
+                    xc = img_targets[:, 2] * img_w
+                    yc = img_targets[:, 3] * img_h
+                    w = img_targets[:, 4] * img_w
+                    h = img_targets[:, 5] * img_h
+                    boxes_xyxy = torch.stack(
+                        [img_targets[:, 1], xc - w / 2, yc - h / 2, xc + w / 2, yc + h / 2], dim=1
+                    )
+                else:
+                    boxes_xyxy = torch.zeros((0, 5), dtype=torch.float32)
+
+                all_preds.append(nms_preds[b_idx].cpu())
+                all_targets.append(boxes_xyxy)
+
+    return evaluate_detections(
+        all_preds,
+        all_targets,
+        iou_threshold=IOU_MATCH_THRESHOLD,
+        num_classes=num_classes,
+        report_conf_thres=report_conf_thres,
+    )

@@ -19,7 +19,7 @@ def benchmark_model(
     input_size: Tuple[int, int] = (200, 200),
     device: str = "cuda" if torch.cuda.is_available() else "cpu",
     warmup_runs: int = 15,
-    benchmark_runs: int = 50,
+    benchmark_runs: int = 100,
 ) -> Dict[str, Any]:
     """
     Measures parameter counts, model memory footprint, raw model FPS,

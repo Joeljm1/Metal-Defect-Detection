@@ -40,9 +40,7 @@ class Trainer:
         self.optimizer = torch.optim.AdamW(
             self.model.parameters(), lr=learning_rate, weight_decay=weight_decay
         )
-        self.scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
-            self.optimizer, T_max=50, eta_min=1e-5
-        )
+        self.scheduler = None  # Created in fit() with T_max aligned to the epoch count
 
         self.best_loss = float("inf")
         self.history = {"train_loss": [], "val_loss": []}
@@ -159,6 +157,11 @@ class Trainer:
 
             if dry_run:
                 break
+
+        if not dry_run and self.history["val_loss"]:
+            # Persist end-of-training weights (e.g. for ONNX export / Grad-CAM analysis)
+            final_path = self.save_checkpoint(epochs, self.history["val_loss"][-1], is_best=False)
+            print(f" Saved final model to {final_path}")
 
         elapsed = time.time() - start_time
         print(f"Training completed in {elapsed:.2f}s")
