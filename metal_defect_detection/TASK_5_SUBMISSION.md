@@ -56,6 +56,7 @@ Our team has advanced the project from the initial 25% architectural foundation 
   - Minimum Learning Rate: $1 \times 10^{-5}$ (CosineAnnealingLR across 15 epochs)
   - Batch Size: 16 (4 DataLoader workers)
   - Loss Weights: $\lambda_{\text{box}} = 0.05$ (CIoU), $\lambda_{\text{obj}} = 1.0$ (BCE with $\text{pos\_weight}=25.0$), $\lambda_{\text{cls}} = 0.5$ (BCE)
+* **Reproducibility Notes (post-audit):** the runs reported in the tables below applied random horizontal/vertical flips (p = 0.5 each) to the training split, selected checkpoints and computed final metrics on the same test split, and used `conf_thres = 0.10` for evaluation. The codebase now carves a held-out validation split for checkpoint selection, evaluates the test split exactly once, computes mAP over the full confidence-ranked curve with P/R/F1 reported at `conf = 0.25`, and uses unweighted objectness BCE (`obj_pos_weight = 1.0`). The numbers above correspond to the original Task 5 run and will be regenerated under the corrected harness.
 
 ### 2.2 Overall Ablation Performance Summary
 

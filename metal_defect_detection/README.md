@@ -29,7 +29,9 @@ Automated visual inspection of metallic components in industrial manufacturing l
 ├── pyproject.toml                # uv package specifications & dependencies
 ├── .python-version               # Pinned Python 3.12
 ├── TASK_4_SUBMISSION.md          # Comprehensive Task 4 submission report
-├── REMAINING_MODULES.md          # Roadmap for the remaining 75% project modules
+├── TASK_5_SUBMISSION.md          # Task 5 submission report (50% milestone)
+├── CODEBASE_AUDIT.md             # Codebase audit & methodology review
+├── REMAINING_MODULES.md          # Roadmap for the remaining project modules
 ├── configs/                      # YAML configurations
 │   ├── dataset.yaml              # NEU-DET and GC10-DET dataset specifications
 │   ├── preprocessing.yaml        # CLAHE and bilateral filtering parameters
@@ -51,8 +53,13 @@ Automated visual inspection of metallic components in industrial manufacturing l
 │   ├── run_eda.py                # Exploratory data analysis CLI
 │   ├── preprocess_dataset.py     # Batch dataset enhancement CLI
 │   ├── visualize_preprocessing.py# Preprocessing comparison plot generator
+│   ├── cluster_anchors.py        # K-means anchor box clustering (k=9)
 │   ├── benchmark_fps.py          # Model latency & FPS benchmarking
-│   └── train.py                  # Training CLI supporting M1-M4 ablation models
+│   ├── train.py                  # Training CLI supporting M1-M4 ablation models
+│   ├── train_ablation.py         # Full M1-M4 convergence training runner
+│   ├── evaluate.py               # Test-split evaluation (P/R/F1, mAP@0.5)
+│   ├── visualize_gradcam.py      # Grad-CAM interpretability gallery generator
+│   └── plot_loss_curves.py       # Training convergence plot generator
 ├── reports/                      # EDA reports, statistics JSON, and figures
 └── tests/                        # Comprehensive pytest test suite
 ```
@@ -114,12 +121,18 @@ make dry-run
 
 ## 🔬 Controlled Ablation Study Matrix
 
-| Model | CLAHE Preprocessing | ECA / Spatial Attention | Target mAP@0.5 | Target FPS |
+Measured results from the Task 5 run (15 epochs, RTX 5050) — to be regenerated
+under the corrected training/evaluation harness (see "Training & Evaluation
+Policy") after full 50–100 epoch convergence training:
+
+| Model | CLAHE Preprocessing | ECA / Spatial Attention | mAP@0.5 (Task 5) | E2E FPS |
 |---|:---:|:---:|:---:|:---:|
-| **M1: Baseline** | ❌ | ❌ | Baseline (~75.1–81.6%) | $\ge 50$ FPS |
-| **M2: Preprocessing** | ✅ | ❌ | +1.5–2.5% over M1 | $\ge 45$ FPS |
-| **M3: Attention** | ❌ | ✅ | +2.0–3.5% over M1 | $\ge 40$ FPS |
-| **M4: Proposed Integrated**| ✅ | ✅ | **Peak Performance (+4–6%)** | $\ge 30$ FPS |
+| **M1: Baseline** | ❌ | ❌ | 0.3978 | 310.1 |
+| **M2: Preprocessing** | ✅ | ❌ | 0.3747 | 234.0 |
+| **M3: Attention** | ❌ | ✅ | 0.3552 | 285.2 |
+| **M4: Proposed Integrated**| ✅ | ✅ | **0.4163** | 219.3 |
+
+All variants exceed the industrial real-time requirement ($\ge 30$ FPS end-to-end).
 
 Run any ablation model:
 ```bash
@@ -128,3 +141,20 @@ make train-m2   # Baseline + Preprocessing
 make train-m3   # Baseline + Attention
 make train-m4   # Proposed Integrated Model
 ```
+
+---
+
+## 🧪 Training & Evaluation Policy
+
+* **Data splits:** the training split (1,620 images) is carved deterministically
+  into train + validation (10%, `split_seed=42`) by `create_dataloaders`.
+  Checkpoints are selected on the **validation** split; the **test** split
+  (180 images) is evaluated exactly once at the end.
+* **Evaluation thresholds:** mAP@0.5 is computed over the full confidence-ranked
+  curve (NMS at `conf=0.001`); Precision / Recall / F1 are reported at the fixed
+  operating point `conf=0.25` (see `src/evaluation/metrics.py`).
+* **Augmentation:** training uses random horizontal/vertical flips (p=0.5 each)
+  on the training split. Disable with `--no-augment` in `scripts/train.py` for
+  exact reproducibility of published tables.
+* **Objectness loss:** standard BCE (`obj_pos_weight=1.0`, i.e. no class
+  re-weighting — the stock YOLOv5 operating regime).
