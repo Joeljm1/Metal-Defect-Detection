@@ -6,6 +6,7 @@ from pathlib import Path
 import numpy as np
 import torch
 import pytest
+import cv2
 
 from src.dataset.parser import (
     parse_yolo_label_file,
@@ -13,7 +14,7 @@ from src.dataset.parser import (
     xyxy_to_xywh,
     CLASS_NAMES,
 )
-from src.dataset.loader import yolo_collate_fn
+from src.dataset.loader import yolo_collate_fn, create_dataloaders
 
 
 def test_box_conversions_roundtrip():
@@ -65,3 +66,32 @@ def test_yolo_collate_function():
     assert targets[1, 0].item() == 1  # from img 1
     assert targets[2, 0].item() == 1  # from img 1
     assert len(paths) == 2
+
+
+def test_create_dataloaders_three_way_split(tmp_path: Path):
+    for split, n in (("train", 10), ("test", 4)):
+        img_dir = tmp_path / split / "images"
+        lbl_dir = tmp_path / split / "labels"
+        img_dir.mkdir(parents=True)
+        lbl_dir.mkdir(parents=True)
+        for i in range(n):
+            cv2.imwrite(
+                str(img_dir / f"{split}_{i:03d}.png"),
+                np.zeros((200, 200, 3), dtype=np.uint8),
+            )
+            (lbl_dir / f"{split}_{i:03d}.txt").write_text("0 0.5 0.5 0.2 0.2\n")
+
+    train_loader, val_loader, test_loader = create_dataloaders(
+        tmp_path, batch_size=2, num_workers=0, val_fraction=0.2, split_seed=42
+    )
+
+    # 10 train images -> 8 train + 2 val; test split untouched
+    assert len(train_loader.dataset) == 8
+    assert len(val_loader.dataset) == 2
+    assert len(test_loader.dataset) == 4
+
+    # Train and validation partitions must be disjoint (no checkpoint-selection leak)
+    train_names = {p.name for p in train_loader.dataset.image_paths}
+    val_names = {p.name for p in val_loader.dataset.image_paths}
+    assert train_names.isdisjoint(val_names)
+    assert train_names | val_names == {f"train_{i:03d}.png" for i in range(10)}

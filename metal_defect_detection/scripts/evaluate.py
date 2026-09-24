@@ -1,6 +1,10 @@
 """
 Evaluation Script for Defect Detection Models.
-Computes Precision, Recall, F1, and mAP@0.5 on the test set.
+
+Computes Precision, Recall, F1, and mAP@0.5 on the held-out test split using
+the shared evaluation policy: the AP curve spans the full confidence range
+(NMS at conf 0.001) and P/R/F1 are reported at the fixed operating point
+(conf 0.25).
 """
 
 from pathlib import Path
@@ -12,16 +16,19 @@ from rich.table import Table
 from src.models.detector import DefectDetector
 from src.dataset.loader import create_dataloaders
 from src.preprocessing.pipeline import DefectPreprocessor
-from src.evaluation.metrics import evaluate_detections
-from src.utils.box_ops import non_max_suppression
-
+from src.evaluation.metrics import (
+    EVAL_CONF_THRES,
+    REPORT_CONF_THRES,
+    evaluate_model_on_loader,
+)
 
 def run_evaluation(
     model_path: Path,
     data_dir: Path = Path("data/NEU-DET"),
-    conf_thres: float = 0.20,
+    conf_thres: float = EVAL_CONF_THRES,
     iou_thres: float = 0.45,
     device_name: str | None = None,
+    report_conf_thres: float = REPORT_CONF_THRES,
 ):
     console = Console()
     device = device_name or ("cuda" if torch.cuda.is_available() else "cpu")
@@ -38,7 +45,7 @@ def run_evaluation(
     if "M2" in variant or "M4" in variant or "Integrated" in variant or "Preprocessing" in variant:
         preprocessor = DefectPreprocessor(use_clahe=True, use_bilateral=True)
 
-    _, test_loader = create_dataloaders(
+    _, _, test_loader = create_dataloaders(
         data_dir=data_dir,
         preprocessor=preprocessor,
         batch_size=16,
@@ -46,37 +53,21 @@ def run_evaluation(
         augment_train=False,
     )
 
-    all_preds = []
-    all_targets = []
+    metrics = evaluate_model_on_loader(
+        model,
+        test_loader,
+        device,
+        conf_thres=conf_thres,
+        iou_thres=iou_thres,
+        report_conf_thres=report_conf_thres,
+    )
 
-    with torch.no_grad():
-        for images, targets, _ in test_loader:
-            images = images.to(device)
-            preds, _ = model(images)  # decoded boxes: (B, num_boxes, 11)
-            nms_preds = non_max_suppression(preds, conf_thres=conf_thres, iou_thres=iou_thres)
-
-            img_h, img_w = float(images.shape[2]), float(images.shape[3])
-            for b_idx in range(images.shape[0]):
-                # Target boxes for this image
-                img_targets = targets[targets[:, 0] == b_idx]
-                if img_targets.numel() > 0:
-                    # Convert normalized xywh to pixel xyxy
-                    xc = img_targets[:, 2] * img_w
-                    yc = img_targets[:, 3] * img_h
-                    w = img_targets[:, 4] * img_w
-                    h = img_targets[:, 5] * img_h
-                    boxes_xyxy = torch.stack(
-                        [img_targets[:, 1], xc - w / 2, yc - h / 2, xc + w / 2, yc + h / 2], dim=1
-                    )
-                else:
-                    boxes_xyxy = torch.zeros((0, 5), dtype=torch.float32)
-
-                all_preds.append(nms_preds[b_idx].cpu())
-                all_targets.append(boxes_xyxy)
-
-    metrics = evaluate_detections(all_preds, all_targets, iou_threshold=0.5, num_classes=6)
-
-    table = Table(title=f"Evaluation Results on NEU-DET Test Set ({variant})")
+    table = Table(
+        title=(
+            f"Evaluation Results on NEU-DET Test Set ({variant}) — "
+            f"P/R/F1 @ conf {report_conf_thres}, AP over full curve"
+        )
+    )
     table.add_column("Class", style="cyan")
     table.add_column("Ground Truths", style="white")
     table.add_column("Precision", style="green")
@@ -105,7 +96,6 @@ def run_evaluation(
     )
 
     console.print(table)
-
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
