@@ -26,6 +26,7 @@ class NEUDataset(Dataset):
         target_size: Tuple[int, int] = (200, 200),
         is_training: bool = False,
         augment: bool = False,
+        image_paths: Optional[List[Path]] = None,
     ):
         self.image_dir = Path(image_dir)
         self.label_dir = Path(label_dir)
@@ -34,13 +35,16 @@ class NEUDataset(Dataset):
         self.is_training = is_training
         self.augment = augment and is_training
 
-        # Scan for images
+        # Scan for images, or use an explicit subset (e.g. a train/val split)
         supported_exts = {".jpg", ".jpeg", ".png", ".bmp"}
-        self.image_paths = sorted(
-            [p for p in self.image_dir.iterdir() if p.suffix.lower() in supported_exts]
-        )
+        if image_paths is not None:
+            self.image_paths = sorted(image_paths)
+        else:
+            self.image_paths = sorted(
+                [p for p in self.image_dir.iterdir() if p.suffix.lower() in supported_exts]
+            )
 
-        if len(self.image_paths) == 0:
+        if len(self.image_paths) == 0 and image_paths is None:
             raise RuntimeError(f"No images found in {self.image_dir}")
 
     def __len__(self) -> int:
@@ -130,15 +134,40 @@ def create_dataloaders(
     num_workers: int = 2,
     target_size: Tuple[int, int] = (200, 200),
     augment_train: bool = True,
-) -> Tuple[DataLoader, DataLoader]:
+    val_fraction: float = 0.1,
+    split_seed: int = 42,
+) -> Tuple[DataLoader, DataLoader, DataLoader]:
     """
-    Factory function to create train and validation DataLoaders.
+    Factory function to create train, validation, and test DataLoaders.
+
+    The validation split is carved deterministically from the training images
+    (``val_fraction`` of them, shuffled with ``split_seed``) so that checkpoint
+    selection never sees the held-out test split. The test split is only meant
+    for final evaluation.
+
+    Returns:
+        (train_loader, val_loader, test_loader)
     """
     data_dir = Path(data_dir)
     train_img_dir = data_dir / "train" / "images"
     train_lbl_dir = data_dir / "train" / "labels"
     test_img_dir = data_dir / "test" / "images"
     test_lbl_dir = data_dir / "test" / "labels"
+
+    # Deterministic train / validation split over the training images
+    all_train_paths = NEUDataset(
+        image_dir=train_img_dir, label_dir=train_lbl_dir, target_size=target_size
+    ).image_paths
+    indices = list(range(len(all_train_paths)))
+    random.Random(split_seed).shuffle(indices)
+    n_val = int(round(len(indices) * val_fraction))
+    if len(indices) > 1:
+        n_val = min(max(n_val, 1), len(indices) - 1)
+    else:
+        n_val = 0
+    val_indices = set(indices[:n_val])
+    train_paths = [p for i, p in enumerate(all_train_paths) if i not in val_indices]
+    val_paths = [p for i, p in enumerate(all_train_paths) if i in val_indices]
 
     train_dataset = NEUDataset(
         image_dir=train_img_dir,
@@ -147,6 +176,17 @@ def create_dataloaders(
         target_size=target_size,
         is_training=True,
         augment=augment_train,
+        image_paths=train_paths,
+    )
+
+    val_dataset = NEUDataset(
+        image_dir=train_img_dir,
+        label_dir=train_lbl_dir,
+        preprocessor=preprocessor,
+        target_size=target_size,
+        is_training=False,
+        augment=False,
+        image_paths=val_paths,
     )
 
     test_dataset = NEUDataset(
@@ -167,6 +207,15 @@ def create_dataloaders(
         pin_memory=torch.cuda.is_available(),
     )
 
+    val_loader = DataLoader(
+        val_dataset,
+        batch_size=batch_size,
+        shuffle=False,
+        num_workers=num_workers,
+        collate_fn=yolo_collate_fn,
+        pin_memory=torch.cuda.is_available(),
+    )
+
     test_loader = DataLoader(
         test_dataset,
         batch_size=batch_size,
@@ -176,4 +225,4 @@ def create_dataloaders(
         pin_memory=torch.cuda.is_available(),
     )
 
-    return train_loader, test_loader
+    return train_loader, val_loader, test_loader

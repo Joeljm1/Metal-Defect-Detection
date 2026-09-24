@@ -17,15 +17,22 @@ from src.utils.box_ops import bbox_ciou
 class ComputeLoss(nn.Module):
     """
     Computes multi-scale YOLO loss with CIoU box regression.
+
+    Note on objectness imbalance: YOLO's anchor matching intentionally creates a
+    heavily imbalanced objectness map (a handful of positive cells vs tens of
+    thousands of background cells). Standard YOLOv5 copes with this without
+    re-weighting, so ``obj_pos_weight`` defaults to 1.0 (plain BCE). Values > 1
+    trade precision for recall (e.g. 25.0 inflates recall but collapses precision
+    at standard confidence thresholds) and should only be used as an explicit,
+    reported experiment.
     """
 
     def __init__(
         self,
-        hyp: Dict[str, float] | None = None,
         box_gain: float = 0.05,
         cls_gain: float = 0.5,
         obj_gain: float = 1.0,
-        obj_pos_weight: float = 25.0,
+        obj_pos_weight: float = 1.0,
         anchor_threshold: float = 4.0,
     ):
         super().__init__()

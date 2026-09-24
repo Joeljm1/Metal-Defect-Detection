@@ -75,12 +75,12 @@ class PANetNeck(nn.Module):
         p3_out = self.c3_fpn2(torch.cat([p4_upsampled, p3], dim=1))
 
         # --- Bottom-Up PANet Pathway ---
+        # Stride-2 convolutions land exactly on the next pyramid level's
+        # resolution (ceil(H/2)), so the concatenations align without resizing.
         p3_down = self.down_p3(p3_out)
-        p3_down = F.interpolate(p3_down, size=p4_fused.shape[2:], mode="nearest")
         p4_out = self.c3_pan1(torch.cat([p3_down, p4_fused], dim=1))
 
         p4_down = self.down_p4(p4_out)
-        p4_down = F.interpolate(p4_down, size=p5.shape[2:], mode="nearest")
         p5_out = self.c3_pan2(torch.cat([p4_down, p5], dim=1))
 
         # --- Attention Enhancement (M3 / M4) ---

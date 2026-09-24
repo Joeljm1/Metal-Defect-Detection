@@ -29,8 +29,10 @@ class DetectHead(nn.Module):
         self.strides = strides
 
         if anchors is None:
-            # Anchors computed via K-Means clustering on the 200x200 NEU-DET defect dataset
-            # Tailored to metallic defect aspect ratios (e.g. elongated scratches vs large patches)
+            # Anchors matched to 200x200 NEU-DET defect aspect ratios (small pits,
+            # elongated scratches, large patches), grouped small->large per scale.
+            # Reference k-means derivation (IoU distance, k=9):
+            #   uv run python scripts/cluster_anchors.py
             anchors = [
                 [[29, 38], [34, 76], [79, 56]],       # P3 / stride 8 (small / compact defects)
                 [[33, 185], [57, 122], [178, 51]],    # P4 / stride 16 (elongated scratches / horizontal scale)

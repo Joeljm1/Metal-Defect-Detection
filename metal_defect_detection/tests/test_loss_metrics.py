@@ -59,6 +59,64 @@ def test_evaluate_detections_metrics():
     assert "per_class" in metrics
 
 
+def test_objectness_pos_weight_default_is_unweighted():
+    # Standard YOLOv5 operating regime: no objectness class re-weighting.
+    # Values > 1 inflate recall at the cost of precision.
+    assert ComputeLoss().obj_pos_weight == 1.0
+
+
+def test_metrics_operating_point_precision_recall():
+    # One image: 1 TP (conf 0.90) + 1 FP (conf 0.80), 1 GT total.
+    preds = [
+        torch.tensor([
+            [10.0, 10.0, 50.0, 50.0, 0.90, 0.0],
+            [100.0, 100.0, 140.0, 140.0, 0.80, 0.0],
+        ]),
+    ]
+    targets = [
+        torch.tensor([[0.0, 10.0, 10.0, 50.0, 50.0]]),
+    ]
+
+    metrics = evaluate_detections(
+        preds, targets, iou_threshold=0.5, num_classes=1, report_conf_thres=0.25
+    )
+    per = metrics["per_class"]["crazing"]
+    assert per["ap50"] > 0.99  # AP uses the full ranked curve
+    assert abs(per["precision"] - 0.5) < 1e-6  # 1 TP out of 2 detections
+    assert abs(per["recall"] - 1.0) < 1e-6
+
+    metrics_strict = evaluate_detections(
+        preds, targets, iou_threshold=0.5, num_classes=1, report_conf_thres=0.85
+    )
+    per_strict = metrics_strict["per_class"]["crazing"]
+    assert abs(per_strict["precision"] - 1.0) < 1e-6  # FP filtered at the operating point
+
+
+def test_evaluate_model_on_loader_shared_policy():
+    # Smoke test for the single evaluation code path used by all scripts
+    from torch.utils.data import DataLoader, TensorDataset
+    from src.evaluation.metrics import evaluate_model_on_loader
+
+    class StubDetector(torch.nn.Module):
+        def forward(self, x):
+            b = x.shape[0]
+            decoded = torch.rand(b, 10, 11)  # [x, y, w, h, obj, cls...] in [0, 1]
+            return decoded, None
+
+    def collate(batch):
+        imgs = torch.stack([item[0] for item in batch])
+        targets = torch.tensor([[0.0, 0.0, 0.5, 0.5, 0.2, 0.2]])  # [img_idx, cls, xc, yc, w, h]
+        return imgs, targets, ["a.jpg", "b.jpg"]
+
+    loader = DataLoader(
+        TensorDataset(torch.zeros(2, 3, 200, 200)), batch_size=2, collate_fn=collate
+    )
+    metrics = evaluate_model_on_loader(StubDetector(), loader, device="cpu")
+    assert 0.0 <= metrics["mAP@0.5"] <= 1.0
+    assert "per_class" in metrics
+    assert "mean_precision" in metrics
+
+
 def test_map_unpredicted_class_averaging():
     # Two classes present in ground truth:
     # Class 0 has 1 perfect detection (AP=1.0)
