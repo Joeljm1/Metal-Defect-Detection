@@ -51,9 +51,19 @@ pdf-task4:
 	typst compile ../CSE411_Project_Task_4_Group_6.typ ../CSE411_Project_Task_4_Group_6.pdf
 	cp ../CSE411_Project_Task_4_Group_6.pdf ./CSE411_Project_Task_4_Group_6.pdf
 
-pdf:
+pdf-task5:
 	typst compile ../CSE411_Project_Task_5_Group_6.typ ../CSE411_Project_Task_5_Group_6.pdf
 	cp ../CSE411_Project_Task_5_Group_6.pdf ./CSE411_Project_Task_5_Group_6.pdf
+
+pdf-task6:
+	typst compile ../CSE411_Project_Task_6_Group_6.typ ../CSE411_Project_Task_6_Group_6.pdf
+	cp ../CSE411_Project_Task_6_Group_6.pdf ./CSE411_Project_Task_6_Group_6.pdf
+
+gc10-eval:
+	$(PYTHON) scripts/evaluate_gc10.py
+
+export-onnx:
+	$(PYTHON) scripts/export_and_benchmark_onnx.py
 
 gradcam:
 	$(PYTHON) scripts/visualize_gradcam.py

@@ -6,6 +6,7 @@ Integrated model maintains real-time inference throughput (>= 30-50 FPS).
 """
 
 import argparse
+from typing import Any
 import torch
 from rich.console import Console
 from rich.table import Table
@@ -17,7 +18,9 @@ from src.evaluation.benchmark import benchmark_model
 def run_benchmark_matrix(device_name: str | None = None):
     device = device_name or ("cuda" if torch.cuda.is_available() else "cpu")
     console = Console()
-    console.print(f"[bold cyan]Running Performance & FPS Benchmark on device: {device}[/bold cyan]\n")
+    console.print(
+        f"[bold cyan]Running Performance & FPS Benchmark on device: {device}[/bold cyan]\n"
+    )
 
     variants = ["M1", "M2", "M3", "M4"]
     descriptions = {
@@ -48,13 +51,21 @@ def run_benchmark_matrix(device_name: str | None = None):
     table.add_column("Real-Time (>=30 FPS)", style="bold blue")
 
     for r in results:
-        status_str = "[green]YES (PASS)[/green]" if r["realtime_feasible"] else "[red]NO (FAIL)[/red]"
+        status_str = (
+            "[green]YES (PASS)[/green]"
+            if r["realtime_feasible"]
+            else "[red]NO (FAIL)[/red]"
+        )
         table.add_row(
             r["variant"],
             r["description"],
             f"{r['total_parameters']:,}",
             f"{r['model_size_mb']:.2f} MB",
-            f"{r['preproc_latency_mean_ms']:.2f} ms" if r["preproc_latency_mean_ms"] > 0 else "0.00 ms",
+            (
+                f"{r['preproc_latency_mean_ms']:.2f} ms"
+                if r["preproc_latency_mean_ms"] > 0
+                else "0.00 ms"
+            ),
             f"{r['model_latency_mean_ms']:.2f} ms",
             f"{r['end_to_end_latency_ms']:.2f} ms",
             f"{r['model_fps']:.1f}",

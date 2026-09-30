@@ -22,6 +22,10 @@ dependencies = [
     "seaborn>=0.12.0",
     "scipy>=1.11.0",
     "rich>=13.0.0",
+    "onnx>=1.23.1",
+    "onnxruntime>=1.30.0",
+    "streamlit>=1.64.0",
+    "onnxscript>=0.7.2",
 ]
 
 [project.optional-dependencies]
