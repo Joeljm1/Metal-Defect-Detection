@@ -5,6 +5,11 @@ from src.deployment.export import (
     predict_onnx,
     benchmark_edge_runtime,
 )
+from src.deployment.dashboard import (
+    load_inspection_model,
+    run_defect_inspection,
+    CLASS_COLORS,
+)
 
 __all__ = [
     "ExportableDetectorWrapper",
@@ -12,4 +17,7 @@ __all__ = [
     "create_onnx_inference_session",
     "predict_onnx",
     "benchmark_edge_runtime",
+    "load_inspection_model",
+    "run_defect_inspection",
+    "CLASS_COLORS",
 ]

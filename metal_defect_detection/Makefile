@@ -59,6 +59,13 @@ pdf-task6:
 	typst compile ../CSE411_Project_Task_6_Group_6.typ ../CSE411_Project_Task_6_Group_6.pdf
 	cp ../CSE411_Project_Task_6_Group_6.pdf ./CSE411_Project_Task_6_Group_6.pdf
 
+pdf-task7:
+	typst compile ../CSE411_Project_Task_7_Group_6.typ ../CSE411_Project_Task_7_Group_6.pdf
+	cp ../CSE411_Project_Task_7_Group_6.pdf ./CSE411_Project_Task_7_Group_6.pdf
+
+dashboard:
+	$(PYTHON) scripts/run_dashboard.py
+
 gc10-eval:
 	$(PYTHON) scripts/evaluate_gc10.py
 
