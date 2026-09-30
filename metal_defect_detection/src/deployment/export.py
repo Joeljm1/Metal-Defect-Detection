@@ -9,6 +9,7 @@ Provides:
 
 from pathlib import Path
 from typing import Dict, Any, Tuple, Optional, List, Union
+import logging
 import time
 import numpy as np
 import torch
@@ -40,7 +41,7 @@ def export_model_to_onnx(
     model: DefectDetector,
     output_path: Path | str,
     input_size: Tuple[int, int] = (200, 200),
-    opset_version: int = 17,
+    opset_version: int = 18,
     half_precision: bool = False,
     device: str = "cpu",
 ) -> Path:
@@ -51,7 +52,7 @@ def export_model_to_onnx(
         model: DefectDetector instance
         output_path: Destination path for .onnx file
         input_size: (H, W) input spatial resolution
-        opset_version: ONNX operator set version (default: 17)
+        opset_version: ONNX operator set version (default: 18)
         half_precision: If True, exports in FP16 precision
         device: Device to use during export ('cpu' or 'cuda')
 
@@ -68,39 +69,44 @@ def export_model_to_onnx(
     else:
         dummy_input = torch.randn(1, 3, *input_size, device=device, dtype=torch.float32)
 
+    export_kwargs: Dict[str, Any] = dict(
+        export_params=True,
+        opset_version=opset_version,
+        do_constant_folding=True,
+        input_names=["images"],
+        output_names=["detections"],
+    )
+
+    # Keep exporter progress chatter out of console output
+    torch_onnx_logger = logging.getLogger("torch.onnx")
+    previous_level = torch_onnx_logger.level
+    torch_onnx_logger.setLevel(logging.WARNING)
     try:
-        # Try export with legacy TorchScript exporter for maximum opset stability
+        # Preferred: torch.export-based (dynamo) ONNX exporter — the supported
+        # path going forward (the legacy TorchScript exporter is deprecated).
         torch.onnx.export(
             model_to_export,
-            dummy_input,
+            (dummy_input,),
             str(output_path),
-            export_params=True,
-            opset_version=opset_version,
-            do_constant_folding=True,
-            input_names=["images"],
-            output_names=["detections"],
-            dynamic_axes={
-                "images": {0: "batch_size"},
-                "detections": {0: "batch_size"},
-            },
-            dynamo=False,
+            dynamo=True,
+            dynamic_shapes={"x": {0: torch.export.Dim("batch_size", min=1, max=64)}},
+            **export_kwargs,
         )
     except Exception:
-        # Fallback to standard export
+        # Fallback: legacy TorchScript exporter with dynamic_axes
         torch.onnx.export(
             model_to_export,
-            dummy_input,
+            (dummy_input,),
             str(output_path),
-            export_params=True,
-            opset_version=opset_version,
-            do_constant_folding=True,
-            input_names=["images"],
-            output_names=["detections"],
+            dynamo=False,
             dynamic_axes={
                 "images": {0: "batch_size"},
                 "detections": {0: "batch_size"},
             },
+            **export_kwargs,
         )
+    finally:
+        torch_onnx_logger.setLevel(previous_level)
 
     # Validate ONNX graph integrity
     onnx_model = onnx.load(str(output_path))
