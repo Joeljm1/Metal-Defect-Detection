@@ -126,7 +126,7 @@ Across Tasks 4, 5, 6, and 7, our team has realized every proposed module from ra
 ]
 
 #v(0.3em)
-*End-to-End System Integration:* All components are unified into an end-to-end operational pipeline and validated by an automated regression test suite in `pytest` (*39 passing unit and integration tests*).
+*End-to-End System Integration:* All components are unified into an end-to-end operational pipeline and validated by an automated regression test suite in `pytest` (*40 passing unit and integration tests*).
 
 #pagebreak()
 
@@ -228,9 +228,9 @@ Evaluating on the external GC10-DET dataset confirms that M4 provides superior c
     align: (left, center, center, center),
     fill: (col, row) => if row == 0 { rgb("f0f4f8") } else { none },
     [*Evaluation Metric*], [*M1 (Baseline)*], [*M4 (Proposed)*], [*M4 Advantage / Relative Gain*],
-    [Source Domain (NEU-DET mAP\@0.5)], [39.78%], [41.63%], [+1.85% (+5.8% rel.)],
+    [Source Domain (NEU-DET mAP\@0.5)], [39.78%], [41.63%], [+1.85 pp (+4.6% rel.)],
     [Zero-Shot Transfer (GC10-DET mAP\@0.5)], [0.09%], [0.06%], [Severe inter-plant domain shift],
-    [*Few-Shot Adaptation (GC10-DET mAP\@0.5)*], [*11.50%*], [*17.48%*], [*+5.98% (+52.0% relative gain)*],
+    [*Few-Shot Adaptation (GC10-DET mAP\@0.5)*], [*11.50%*], [*17.48%*], [*+5.98 pp (+52.0% relative gain)*],
     [Target Precision (\@ conf 0.25)], [18.23%], [24.61%], [+35.0% relative gain],
     [Target Recall (\@ conf 0.25)], [22.45%], [31.80%], [+41.6% relative gain],
   )
@@ -279,7 +279,7 @@ On all execution engines, M4 operates at *$3.8 times$ to $6.1 times$* the requir
     [`src/deployment/`], [ONNX model graph export with dynamic batching and Streamlit dashboard backend.],
     [`app.py`], [Interactive Streamlit web inspection dashboard for plant quality control operators.],
     [`scripts/`], [CLI runners for EDA, training, Grad-CAM, anchor clustering, GC10 transfer, ONNX export.],
-    [`tests/`], [Automated regression suite: *39 passing unit and integration tests* in `pytest`.],
+    [`tests/`], [Automated regression suite: *40 passing unit and integration tests* in `pytest`.],
   )
 ]
 

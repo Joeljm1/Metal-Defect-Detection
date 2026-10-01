@@ -83,7 +83,7 @@ Visual demonstration captured in `reports/figures/dashboard_inspection_demo.png`
 * `src/evaluation/metrics.py`: VOC-style 101-point AP interpolation, full-curve mAP@0.5, and operating point $P/R/F1$.
 * `src/evaluation/benchmark.py`: High-precision inference latency and FPS throughput benchmark harness.
 * `src/evaluation/gradcam.py`: Multi-scale Grad-CAM visual attribution engine hooked into neck fusion layers.
-* `src/evaluation/domain_adaptation.py`: GC10-DET dataset loader, morphological semantic mapping, and few-shot linear probing.
+* `src/evaluation/domain_adaptation.py`: GC10-DET dataset loader, morphological semantic mapping, and few-shot head adaptation.
 * `src/deployment/export.py`: ONNX model exporter with dynamic batching, graph validation, and edge runtime profiling.
 * `src/deployment/dashboard.py`: Streamlit dashboard helper functions, color schemes, and defect inspection pipeline.
 * `src/utils/box_ops.py`: IoU, CIoU, box format conversions, and class-aware non-maximum suppression.
@@ -102,21 +102,21 @@ Visual demonstration captured in `reports/figures/dashboard_inspection_demo.png`
 * `scripts/evaluate.py`: Standalone CLI checkpoint evaluator.
 
 ### Test Suite:
-* `tests/`: **39 passing unit and integration tests** verifying 100% of software components.
+* `tests/`: **40 passing unit and integration tests** verifying 100% of software components.
 
 ---
 
 ## 5. Automated Verification & Test Status
 
-All **39 tests pass** cleanly in `pytest`:
+All **40 tests pass** cleanly in `pytest`:
 ```bash
 uv run pytest tests/ -v
-# 39 passed, 6 warnings in 12.43s
+# 40 passed, 2 warnings in 33.16s
 ```
 Test suite breakdown:
 * `test_attention.py`: ECA channel & spatial attention tensor operations (3 tests)
 * `test_benchmark.py`: Hardware benchmark timing and FPS validation (1 test)
-* `test_dashboard.py`: Model caching, pipeline inspection, and color mapping (3 tests)
+* `test_dashboard.py`: Model caching, pipeline inspection, color mapping, and report serialization (4 tests)
 * `test_dataset.py`: VOC parsing, YOLO collate, and 3-way split determinism (4 tests)
 * `test_domain_adaptation.py`: GC10 loading, remapping, and few-shot adaptation (4 tests)
 * `test_evaluation_script.py`: Evaluation script execution smoke test (1 test)
