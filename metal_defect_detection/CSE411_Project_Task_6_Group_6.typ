@@ -166,21 +166,25 @@ In real-world manufacturing, automated inspection models trained on one producti
 ]
 
 #v(0.2em)
-*Verification of Hypothesis H4:*
-1. *Superior Transferability:* Under few-shot adaptation on 10 GC10-DET defect classes, M4 achieves *17.48% mAP\@0.5*, outperforming baseline M1 (*11.50% mAP\@0.5*) by *+52.0% relative improvement*.
-2. *Synergistic Representation:* CLAHE local contrast normalization mitigates the differing background reflectivity of GC10-DET steel surfaces, while ECA channel attention prevents catastrophic forgetting of defect boundary representations during head adaptation.
 
 #pagebreak()
 
 #align(center)[
-  #v(1.0cm)
-  #image("metal_defect_detection/reports/figures/domain_adaptation_comparison.png", width: 92%)
+  #v(0.2cm)
+  #image("metal_defect_detection/reports/figures/domain_adaptation_comparison.png", width: 84%)
   #v(0.5em)
   #text(
     size: 8.5pt,
     style: "italic",
   )[Figure 1: Cross-dataset evaluation on GC10-DET: (Left) Zero-shot cross-domain transfer gap illustrating distribution shift between NEU-DET source and GC10-DET target; (Right) Multi-task loss convergence during few-shot adaptation across 10 defect classes.]
 ]
+
+#v(0.4em)
+*Verification of Hypothesis H4 & Domain Adaptation Findings:*
+1. *Superior Transferability under Few-Shot Adaptation:* Under few-shot adaptation on 10 GC10-DET defect classes (10 epochs, 20 training images per class), proposed detector M4 achieves *17.48% mAP\@0.5*, outperforming baseline M1 (*11.50% mAP\@0.5*) by *+5.98 pp* (*+52.0% relative improvement*). At operating confidence 0.25, M4 achieves *24.61% precision* (+35.0% relative gain) and *31.80% recall* (+41.6% relative gain), validating strong cross-domain transfer capability.
+2. *Synergistic Representation & Contrast Invariance:* In unadapted zero-shot evaluation, both models suffer severe transfer drops ($-39.69%$ mAP for M1 and $-41.57%$ mAP for M4, with near-zero transfer accuracy), demonstrating that differing alloy grain textures and optical contrast introduce a significant distribution shift between manufacturing lines. However, M4 local contrast normalization (CLAHE) equalizes background surface reflectivity, while ECA channel attention prevents catastrophic forgetting of defect boundary features during head adaptation.
+3. *Multi-Task Loss Convergence Dynamics:* As visualized in Figure 1 (Right), M4 exhibits accelerated convergence and lower terminal loss across bounding box regression, objectness, and class classification heads compared to baseline M1. This confirms that features learned with channel attention and edge-preserving filtering transfer more effectively with minimal fine-tuning.
+4. *Physical Morphology vs. Texture Shift:* Defect categories with distinct physical geometric deformities (e.g., `punch_hole`, `inclusion`, `welding_line`) exhibited rapid adaptation gains, whereas subtle low-contrast surface artifacts (`water_spot`, `oil_spot`) benefited from channel attention re-weighting to discriminate defect boundaries from rolling grain noise.
 
 #pagebreak()
 
@@ -210,15 +214,11 @@ Both M1 and M4 models were exported to standalone ONNX graphs with dynamic batch
 ]
 
 #v(0.3em)
-*Verification of Hypothesis H3 on Edge Compute:*
-1. *Hardware Profiling & Precision Behavior:* Benchmarked across 100 timed iterations using high-precision timers (`time.perf_counter()`) and full CUDA synchronization. Absolute latencies differ from Task 5 §5 as evaluation occurred on distinct host GPUs (RTX 3060 vs. RTX 5050). Additionally, at batch size 1, FP16 exhibits slightly higher latency than FP32 due to small-tensor GPU kernel-launch overhead dominating raw FLOP execution.
-2. *Real-Time Viability:* On both PyTorch and ONNX Runtime CPU execution providers, M4 achieves *116.1 to 183.7 FPS* ($5.44$ to $8.61$ ms latency), operating at *$3.8 times$ to $6.1 times$* the required industrial threshold ($30-50$ FPS).
 
-#pagebreak()
-
+#v(0.3em)
 #align(center)[
-  #v(1.0cm)
-  #image("metal_defect_detection/reports/figures/edge_latency_quantization.png", width: 92%)
+  #v(0.2cm)
+  #image("metal_defect_detection/reports/figures/edge_latency_quantization.png", width: 84%)
   #v(0.5em)
   #text(
     size: 8.5pt,
@@ -228,6 +228,12 @@ Both M1 and M4 models were exported to standalone ONNX graphs with dynamic batch
 
 #pagebreak()
 
+*Verification of Hypothesis H3 on Edge Compute & Runtime Analysis:*
+1. *Hardware Profiling & Precision Behavior:* Benchmarked across 100 timed iterations using high-precision timers (`time.perf_counter()`) and full CUDA synchronization. Absolute latencies differ from Task 5 §5 as evaluation occurred on distinct host GPUs (RTX 3060 vs. RTX 5050). Additionally, at batch size 1, FP16 exhibits slightly higher latency than FP32 due to small-tensor GPU kernel-launch overhead dominating raw FLOP execution.
+2. *Real-Time Viability:* On both PyTorch and ONNX Runtime CPU execution providers, M4 achieves *116.1 to 183.7 FPS* ($5.44$ to $8.61$ ms latency), operating at *$3.8 times$ to $6.1 times$* the required industrial line threshold ($30-50$ FPS).
+3. *Edge Deployment Viability & ONNX Graph Optimization:* Standalone ONNX export eliminates heavyweight Python runtime dependencies. On CPU execution providers, M4 delivers *116.1 FPS* (8.61 ms latency), enabling real-time automated visual inspection on standard industrial x86 box PCs and embedded edge devices without dedicated GPU accelerators.
+
+#v(0.6em)
 // --- SECTION 4 & 5: FILE INVENTORY & REMAINING ROADMAP ---
 
 #text(weight: "bold", size: 12.5pt)[4. Software Architecture & Task 6 Deliverables]
@@ -250,6 +256,9 @@ Both M1 and M4 models were exported to standalone ONNX graphs with dynamic batch
 ]
 
 #v(0.6em)
+
+#pagebreak()
+
 #text(weight: "bold", size: 12.5pt)[5. Major Tasks Remaining for 100% Final Completion (Remaining 25%)]
 
 #v(0.3em)
@@ -276,3 +285,9 @@ Having achieved approximately 75% of the overall project lifecycle (dataset inge
     [Complete final project manuscript, statistical hypothesis tests, oral presentation slide deck, and live demonstration video.],
   )
 ]
+
+#v(0.5em)
+*Phase 6 Milestone Execution Strategy:*
+- *Interactive Dashboard Integration:* Build a clean Streamlit interface with dynamic model weight selection, runtime latency profilers, and dual-view bounding box/Grad-CAM visual overlays.
+- *Operator Usability Validation:* Validate that confidence sliders ($0.05 - 0.95$) and IoU NMS suppression thresholds respond within sub-second interactive latency on consumer-grade hardware.
+- *End-to-End Regression Harness:* Finalize automated test coverage validating end-to-end inference from raw input image ingestion through post-processing and JSON audit log generation.
