@@ -3,17 +3,16 @@ Interactive Metal Surface Defect Inspection Dashboard (CSE411 Team 6).
 Streamlit Application for Real-Time Manufacturing Quality Control.
 """
 
-from pathlib import Path
 import json
 import time
+from pathlib import Path
+
 import cv2
 import numpy as np
 import streamlit as st
 import torch
 
 from src.deployment.dashboard import load_inspection_model, run_defect_inspection
-from src.dataset.parser import CLASS_NAMES
-
 
 st.set_page_config(
     page_title="Metal Surface Defect Inspection Dashboard",
@@ -45,18 +44,23 @@ st.sidebar.header("⚙️ Inspection Configuration")
 
 model_choice = st.sidebar.selectbox(
     "Defect Detection Model",
-    options=["M4 (Proposed Integrated Model)", "M1 (Plain YOLOv5s Baseline)", "M2 (CLAHE + Bilateral)", "M3 (ECA Attention)"],
+    options=["M4 (Proposed Integrated Model)", "M1 (Plain YOLOv5s Baseline)", "M2 (CLAHE + Bilateral)", "M3 (ECA + Spatial Attention)"],
     index=0,
 )
 variant_code = model_choice.split()[0]
 
 conf_thres = st.sidebar.slider(
     "Detection Confidence Threshold",
-    min_value=0.05,
-    max_value=0.95,
-    value=0.25,
-    step=0.05,
-    help="Minimum class probability required to report defect bounding box.",
+    min_value=0.03,
+    max_value=0.80,
+    value=0.10,
+    step=0.01,
+    help="Minimum class probability required to report defect bounding box. Scratches and fine cracks appear at 0.08–0.12; prominent defects detect strongly at 0.20+.",
+)
+st.sidebar.caption(
+    "💡 **Threshold Guide**:\n"
+    "- **0.08 – 0.12**: Thin linear defects (*Scratches*, *Crazing*)\n"
+    "- **0.20 – 0.35+**: High-contrast areal defects (*Patches*, *Pitted Surfaces*)"
 )
 
 iou_thres = st.sidebar.slider(
@@ -94,17 +98,20 @@ cam_alpha = st.sidebar.slider("Heatmap Blending Opacity", 0.1, 0.9, 0.55, 0.05)
 st.sidebar.markdown("---")
 st.sidebar.header("📁 Image Ingestion")
 
-# Sample images discovery
+# Sample images discovery: balanced representative sample from all 6 defect categories
 sample_dir = Path("data/NEU-DET/test/images")
-sample_files = sorted(list(sample_dir.glob("*.jpg"))) if sample_dir.exists() else []
+sample_options = {}
+if sample_dir.exists():
+    for c in ["patches", "pitted_surface", "rolled-in_scale", "inclusion", "crazing", "scratches"]:
+        for p in sorted(sample_dir.glob(f"{c}_*.jpg"))[:6]:
+            sample_options[f"[{c.upper()}] {p.name}"] = p
 
 input_mode = st.sidebar.radio("Input Source", options=["Sample Dataset Image", "Upload Custom Image"])
 
 selected_image_path = None
 uploaded_file = None
 
-if input_mode == "Sample Dataset Image" and sample_files:
-    sample_options = {f.name: f for f in sample_files[:60]}  # Representative sample
+if input_mode == "Sample Dataset Image" and sample_options:
     chosen_sample = st.sidebar.selectbox("Select Sample Defect", options=list(sample_options.keys()))
     selected_image_path = sample_options[chosen_sample]
 elif input_mode == "Upload Custom Image":
@@ -158,11 +165,18 @@ col_kpi2.metric(
     delta=f"{telemetry['total_latency_ms']:.1f} ms total pipeline",
 )
 col_kpi3.metric(
-    "Throughput",
-    f"{telemetry.get('infer_fps', telemetry['fps']):.0f} FPS",
-    delta="Real-Time (>30 FPS)" if telemetry.get("infer_fps", telemetry["fps"]) >= 30.0 else "CPU Bound",
+    "Throughput (pipeline)",
+    f"{telemetry.get('pipeline_fps', telemetry['fps']):.0f} FPS",
+    delta="Real-Time (>30 FPS)" if telemetry.get("realtime_pass") else "CPU Bound",
 )
 col_kpi4.metric("Active Hardware", f"{telemetry['device'].upper()}", delta=f"Model: {variant_code}")
+
+if not telemetry.get("is_trained", True):
+    st.warning(
+        f"No trained checkpoint was found for {variant_code}; detections come from UNTRAINED random weights."
+    )
+if results.get("gradcam_error"):
+    st.warning(f"Grad-CAM failed: {results['gradcam_error']}")
 
 st.markdown("---")
 

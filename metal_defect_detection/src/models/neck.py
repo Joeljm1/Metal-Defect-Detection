@@ -6,15 +6,13 @@ When enabled (ablation variants M3 and M4), injects ECA channel attention and
 spatial attention blocks into the feature pyramid to preserve fine defect gradients.
 """
 
-from typing import List, Tuple
+
 import torch
-import torch.nn as nn
-
-from src.models.backbone import ConvBNSiLU, C3Block
-from src.models.attention import ECASpatialAttention
-
-
 import torch.nn.functional as F
+from torch import nn
+
+from src.models.attention import ECASpatialAttention
+from src.models.backbone import C3Block, ConvBNSiLU
 
 
 class PANetNeck(nn.Module):
@@ -24,15 +22,19 @@ class PANetNeck(nn.Module):
 
     def __init__(
         self,
-        in_channels: List[int],  # [c3, c4, c5], e.g. [128, 256, 512]
+        in_channels: list[int],  # [c3, c4, c5], e.g. [128, 256, 512]
         use_attention: bool = False,
+        use_eca: bool = True,
+        use_spatial: bool = True,
         eca_gamma: int = 2,
         eca_b: int = 1,
         spatial_kernel: int = 7,
     ):
         super().__init__()
         c3, c4, c5 = in_channels
-        self.use_attention = use_attention
+        self.use_attention = use_attention and (use_eca or use_spatial)
+        self.use_eca = use_eca
+        self.use_spatial = use_spatial
 
         # Top-down FPN pathway
         self.reduce_p5 = ConvBNSiLU(c5, c4, 1, 1)
@@ -50,9 +52,15 @@ class PANetNeck(nn.Module):
 
         # Attention modules (M3, M4)
         if self.use_attention:
-            self.att_p3 = ECASpatialAttention(c3, gamma=eca_gamma, b=eca_b, spatial_kernel=spatial_kernel)
-            self.att_p4 = ECASpatialAttention(c4, gamma=eca_gamma, b=eca_b, spatial_kernel=spatial_kernel)
-            self.att_p5 = ECASpatialAttention(c5, gamma=eca_gamma, b=eca_b, spatial_kernel=spatial_kernel)
+            self.att_p3 = ECASpatialAttention(
+                c3, gamma=eca_gamma, b=eca_b, spatial_kernel=spatial_kernel, use_eca=use_eca, use_spatial=use_spatial
+            )
+            self.att_p4 = ECASpatialAttention(
+                c4, gamma=eca_gamma, b=eca_b, spatial_kernel=spatial_kernel, use_eca=use_eca, use_spatial=use_spatial
+            )
+            self.att_p5 = ECASpatialAttention(
+                c5, gamma=eca_gamma, b=eca_b, spatial_kernel=spatial_kernel, use_eca=use_eca, use_spatial=use_spatial
+            )
         else:
             self.att_p3 = nn.Identity()
             self.att_p4 = nn.Identity()
@@ -61,8 +69,8 @@ class PANetNeck(nn.Module):
         self.out_channels = [c3, c4, c5]
 
     def forward(
-        self, features: Tuple[torch.Tensor, torch.Tensor, torch.Tensor]
-    ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+        self, features: tuple[torch.Tensor, torch.Tensor, torch.Tensor]
+    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         p3, p4, p5 = features
 
         # --- Top-Down FPN Pathway ---

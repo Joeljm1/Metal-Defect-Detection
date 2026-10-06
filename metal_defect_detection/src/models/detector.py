@@ -9,16 +9,17 @@ Configurations:
 """
 
 from pathlib import Path
-from typing import Dict, Any, Optional, Tuple, List, Union
-import yaml
+from typing import Any
+
 import numpy as np
 import torch
-import torch.nn as nn
+import yaml
+from torch import nn
 
 from src.models.backbone import CSPDarknetBackbone
-from src.models.neck import PANetNeck
 from src.models.head import DetectHead
-from src.preprocessing.pipeline import DefectPreprocessor
+from src.models.neck import PANetNeck
+from src.preprocessing.pipeline import DefectPreprocessor, load_preprocessing_config
 from src.utils.box_ops import non_max_suppression
 
 _VARIANT_CFG_FILES = {
@@ -29,7 +30,7 @@ _VARIANT_CFG_FILES = {
 }
 
 
-def _resolve_variant(variant: str) -> Tuple[str, str, bool, bool]:
+def _resolve_variant(variant: str) -> tuple[str, str, bool, bool]:
     """Map a variant name to (config key, display name, use_attention, use_preprocessing)."""
     v = variant.upper().strip()
     if "M4" in v or "INTEGRATED" in v:
@@ -43,7 +44,7 @@ def _resolve_variant(variant: str) -> Tuple[str, str, bool, bool]:
     raise ValueError(f"Unknown variant '{variant}'. Expected one of: M1, M2, M3, M4")
 
 
-def load_variant_config(variant: str, config_dir: Optional[Union[str, Path]] = None) -> Dict[str, Any]:
+def load_variant_config(variant: str, config_dir: str | Path | None = None) -> dict[str, Any]:
     """
     Load the YAML configuration for an ablation variant (M1-M4).
 
@@ -67,8 +68,8 @@ def load_variant_config(variant: str, config_dir: Optional[Union[str, Path]] = N
             try:
                 with open(p, "r", encoding="utf-8") as f:
                     return yaml.safe_load(f) or {}
-            except Exception:
-                pass
+            except (OSError, yaml.YAMLError):
+                continue
     return {}
 
 
@@ -84,37 +85,49 @@ class DefectDetector(nn.Module):
         in_channels: int = 3,
         use_attention: bool = False,
         use_preprocessing: bool = False,
+        use_eca: bool = True,
+        use_spatial: bool = True,
+        use_clahe: bool = True,
+        use_bilateral: bool = True,
         eca_gamma: int = 2,
         eca_b: int = 1,
         spatial_kernel: int = 7,
-        anchors: Optional[List[List[Tuple[float, float]]]] = None,
+        anchors: Any = None,
         depth_multiple: float = 0.33,
         width_multiple: float = 0.50,
         variant_name: str = "M1_Baseline",
         clahe_clip_limit: float = 2.0,
-        clahe_tile_grid: Tuple[int, int] = (8, 8),
+        clahe_tile_grid: tuple[int, int] = (8, 8),
         bilateral_d: int = 5,
         bilateral_sigma_color: float = 50.0,
         bilateral_sigma_space: float = 50.0,
+        img_size: tuple[int, int] = (200, 200),
     ):
         super().__init__()
+        self.loaded_checkpoint: str | None = None
         self.variant_name = variant_name
-        self.use_attention = use_attention
-        self.use_preprocessing = use_preprocessing
+        self.use_attention = use_attention and (use_eca or use_spatial)
+        self.use_preprocessing = use_preprocessing and (use_clahe or use_bilateral)
+        self.use_eca = use_eca
+        self.use_spatial = use_spatial
+        self.use_clahe = use_clahe
+        self.use_bilateral = use_bilateral
         self.num_classes = num_classes
+        self.img_size = img_size
 
         # Preprocessor instance
         self.preprocessor = (
-            DefectPreprocessor(
-                use_clahe=True,
+            DefectPreprocessor.from_yaml(
+                use_clahe=use_clahe,
                 clahe_clip_limit=clahe_clip_limit,
                 clahe_tile_grid=clahe_tile_grid,
-                use_bilateral=True,
+                use_bilateral=use_bilateral,
                 bilateral_diameter=bilateral_d,
                 bilateral_sigma_color=bilateral_sigma_color,
                 bilateral_sigma_space=bilateral_sigma_space,
+                target_size=img_size,
             )
-            if use_preprocessing
+            if self.use_preprocessing
             else None
         )
 
@@ -128,17 +141,20 @@ class DefectDetector(nn.Module):
         # Neck: PANet with optional attention
         self.neck = PANetNeck(
             in_channels=self.backbone.out_channels,
-            use_attention=use_attention,
+            use_attention=self.use_attention,
+            use_eca=use_eca,
+            use_spatial=use_spatial,
             eca_gamma=eca_gamma,
             eca_b=eca_b,
             spatial_kernel=spatial_kernel,
         )
 
-        # Head: Multi-scale detection head
+        # Head: Multi-scale detection head with dynamic stride support
         self.head = DetectHead(
             num_classes=num_classes,
             anchors=anchors,
             in_channels=self.neck.out_channels,
+            img_size=img_size,
         )
 
     def preprocess_tensor(self, x: torch.Tensor) -> torch.Tensor:
@@ -162,7 +178,7 @@ class DefectDetector(nn.Module):
 
     def forward(
         self, x: torch.Tensor
-    ) -> List[torch.Tensor] | Tuple[torch.Tensor, List[torch.Tensor]]:
+    ) -> list[torch.Tensor] | tuple[torch.Tensor, list[torch.Tensor]]:
         """
         Forward pass on a batch of (possibly preprocessed) image tensors.
 
@@ -176,11 +192,12 @@ class DefectDetector(nn.Module):
         """
         features = self.backbone(x)
         fused_features = self.neck(features)
-        return self.head(fused_features)
+        img_size = (x.shape[3], x.shape[2]) if x.dim() >= 4 else getattr(self, "img_size", (200, 200))
+        return self.head(fused_features, img_size=img_size)
 
     def predict(
         self,
-        image: Union[np.ndarray, torch.Tensor],
+        image: np.ndarray | torch.Tensor,
         conf_thres: float = 0.25,
         iou_thres: float = 0.45,
     ) -> torch.Tensor:
@@ -219,7 +236,7 @@ class DefectDetector(nn.Module):
 
     @classmethod
     def build_model(
-        cls, variant: str = "M1", config_dir: Optional[Union[str, Path]] = None, num_classes: int = 6
+        cls, variant: str = "M1", config_dir: str | Path | None = None, num_classes: int = 6
     ) -> "DefectDetector":
         """
         Factory method to construct ablation models M1, M2, M3, or M4,
@@ -231,19 +248,44 @@ class DefectDetector(nn.Module):
         p_cfg = m_cfg.get("preprocessing", {})
         a_cfg = m_cfg.get("attention", {})
 
+        # Load global preprocessing.yaml as single source of truth for preprocessing params
+        prep_yaml = load_preprocessing_config(
+            Path(config_dir) / "preprocessing.yaml" if config_dir else None
+        )
+        clahe_yaml = prep_yaml.get("clahe", {})
+        bilateral_yaml = prep_yaml.get("bilateral_filter", {})
+        norm_cfg = prep_yaml.get("normalization", {})
+        target_size = tuple(norm_cfg.get("target_size", (200, 200)))
+
+        clahe_clip = clahe_yaml.get("clip_limit", p_cfg.get("clahe_clip_limit", 2.0))
+        clahe_grid = tuple(clahe_yaml.get("tile_grid_size", p_cfg.get("clahe_tile_grid", (8, 8))))
+        b_d = bilateral_yaml.get("diameter", p_cfg.get("bilateral_d", 5))
+        b_sc = bilateral_yaml.get("sigma_color", p_cfg.get("bilateral_sigma_color", 50.0))
+        b_ss = bilateral_yaml.get("sigma_space", p_cfg.get("bilateral_sigma_space", 50.0))
+
+        cfg_use_eca = a_cfg.get("use_eca", default_att)
+        cfg_use_spatial = a_cfg.get("use_spatial", default_att)
+        cfg_use_clahe = p_cfg.get("use_clahe", default_prep)
+        cfg_use_bilateral = p_cfg.get("use_bilateral", default_prep)
+
         return cls(
             num_classes=m_cfg.get("num_classes", num_classes),
             in_channels=m_cfg.get("in_channels", 3),
-            use_attention=a_cfg.get("use_eca", default_att) or a_cfg.get("use_spatial", default_att),
-            use_preprocessing=p_cfg.get("use_clahe", default_prep) or p_cfg.get("use_bilateral", default_prep),
+            use_attention=cfg_use_eca or cfg_use_spatial,
+            use_preprocessing=cfg_use_clahe or cfg_use_bilateral,
+            use_eca=cfg_use_eca,
+            use_spatial=cfg_use_spatial,
+            use_clahe=cfg_use_clahe,
+            use_bilateral=cfg_use_bilateral,
             eca_gamma=a_cfg.get("eca_gamma", 2),
             eca_b=a_cfg.get("eca_b", 1),
             spatial_kernel=a_cfg.get("spatial_kernel_size", 7),
             anchors=m_cfg.get("anchors", None),
             variant_name=m_cfg.get("name", default_name),
-            clahe_clip_limit=p_cfg.get("clahe_clip_limit", 2.0),
-            clahe_tile_grid=tuple(p_cfg.get("clahe_tile_grid", (8, 8))),
-            bilateral_d=p_cfg.get("bilateral_d", 5),
-            bilateral_sigma_color=p_cfg.get("bilateral_sigma_color", 50.0),
-            bilateral_sigma_space=p_cfg.get("bilateral_sigma_space", 50.0),
+            clahe_clip_limit=clahe_clip,
+            clahe_tile_grid=clahe_grid,
+            bilateral_d=b_d,
+            bilateral_sigma_color=b_sc,
+            bilateral_sigma_space=b_ss,
+            img_size=target_size,
         )

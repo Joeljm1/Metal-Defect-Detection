@@ -2,9 +2,10 @@
 Evaluation Metrics Computation: Precision, Recall, F1-Score, and mAP@0.5.
 """
 
-from typing import List, Dict, Any, Tuple
-import torch
+from typing import Any
+
 import numpy as np
+import torch
 
 from src.dataset.parser import CLASS_NAMES
 from src.utils.box_ops import box_iou, non_max_suppression
@@ -38,12 +39,13 @@ def compute_ap(recall: np.ndarray, precision: np.ndarray) -> float:
 
 
 def evaluate_detections(
-    predictions_list: List[torch.Tensor],
-    targets_list: List[torch.Tensor],
+    predictions_list: list[torch.Tensor],
+    targets_list: list[torch.Tensor],
     iou_threshold: float = 0.5,
     num_classes: int = 6,
     report_conf_thres: float = REPORT_CONF_THRES,
-) -> Dict[str, Any]:
+    class_names: list[str] | None = None,
+) -> dict[str, Any]:
     """
     Evaluate detected bounding boxes against ground truth.
     
@@ -54,6 +56,7 @@ def evaluate_detections(
         num_classes: Total defect classes.
         report_conf_thres: Operating confidence threshold at which precision,
             recall, and F1 are reported (AP uses the full ranked curve).
+        class_names: Optional explicit list of class names. If omitted, defaults to dataset CLASS_NAMES.
         
     Returns:
         dict containing 'precision', 'recall', 'f1', 'map50', and 'per_class' metrics.
@@ -119,8 +122,10 @@ def evaluate_detections(
     recalls = []
     per_class_metrics = {}
 
+    names = class_names if class_names is not None else CLASS_NAMES
+
     for c in range(num_classes):
-        c_name = CLASS_NAMES[c] if c < len(CLASS_NAMES) else f"class_{c}"
+        c_name = names[c] if c < len(names) else f"class_{c}"
         stats = per_class_stats[c]
         num_gt = stats["num_gt"]
 
@@ -192,7 +197,10 @@ def evaluate_detections(
     mean_ap = float(np.mean(aps)) if aps else 0.0
     mean_prec = float(np.mean(precisions)) if precisions else 0.0
     mean_rec = float(np.mean(recalls)) if recalls else 0.0
-    mean_f1 = (
+    # True macro-averaged F1 (mean of per-class F1 for active ground-truth classes)
+    active_f1s = [m["f1"] for m in per_class_metrics.values() if m["num_gt"] > 0]
+    mean_f1 = float(np.mean(active_f1s)) if active_f1s else 0.0
+    harmonic_f1 = (
         float(2 * mean_prec * mean_rec / (mean_prec + mean_rec + 1e-7))
         if (mean_prec + mean_rec) > 0
         else 0.0
@@ -203,6 +211,7 @@ def evaluate_detections(
         "mean_precision": mean_prec,
         "mean_recall": mean_rec,
         "mean_f1": mean_f1,
+        "harmonic_f1": harmonic_f1,
         "per_class": per_class_metrics,
     }
 
@@ -215,15 +224,16 @@ def evaluate_model_on_loader(
     iou_thres: float = 0.45,
     num_classes: int = 6,
     report_conf_thres: float = REPORT_CONF_THRES,
-) -> Dict[str, Any]:
+    class_names: list[str] | None = None,
+) -> dict[str, Any]:
     """
     Shared evaluation loop: runs the model over a DataLoader, applies NMS, and
     computes detection metrics (full-curve mAP@0.5 plus P/R/F1 at the operating
     confidence threshold). Single source of truth for all evaluation scripts.
     """
     model.eval()
-    all_preds: List[torch.Tensor] = []
-    all_targets: List[torch.Tensor] = []
+    all_preds: list[torch.Tensor] = []
+    all_targets: list[torch.Tensor] = []
     with torch.no_grad():
         for images, targets, _ in loader:
             images = images.to(device)
@@ -253,4 +263,5 @@ def evaluate_model_on_loader(
         iou_threshold=IOU_MATCH_THRESHOLD,
         num_classes=num_classes,
         report_conf_thres=report_conf_thres,
+        class_names=class_names,
     )

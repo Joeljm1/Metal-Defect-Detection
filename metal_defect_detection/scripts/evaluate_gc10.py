@@ -7,24 +7,25 @@ Compares:
 3. Quantifies domain gap Delta mAP and transfer efficiency.
 """
 
-from pathlib import Path
-from typing import Dict, Any
 import json
+from pathlib import Path
+from typing import Any
+
 import matplotlib.pyplot as plt
 import numpy as np
 import torch
 from torch.utils.data import DataLoader
 
-from src.models.detector import DefectDetector
 from src.dataset.loader import yolo_collate_fn
 from src.evaluation.domain_adaptation import (
     GC10_CLASSES,
-    GC10Dataset,
     DomainAdaptedDetector,
-    generate_synthetic_gc10_benchmark,
+    GC10Dataset,
     evaluate_zero_shot_domain_transfer,
+    generate_synthetic_gc10_benchmark,
     train_few_shot_adaptation,
 )
+from src.models.detector import DefectDetector
 from src.preprocessing.pipeline import DefectPreprocessor
 
 
@@ -33,7 +34,7 @@ def run_domain_adaptation_benchmark(
     output_summary_path: Path | str = Path("reports/domain_adaptation_summary.json"),
     output_figure_path: Path | str = Path("reports/figures/domain_adaptation_comparison.png"),
     few_shot_epochs: int = 10,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     output_summary_path = Path(output_summary_path)
     output_figure_path = Path(output_figure_path)
     output_summary_path.parent.mkdir(parents=True, exist_ok=True)
@@ -60,7 +61,7 @@ def run_domain_adaptation_benchmark(
         print(f"Loaded checkpoint: {ckpt_m4}")
 
     # Create GC10 DataLoaders
-    prep_m4 = DefectPreprocessor(use_clahe=True, use_bilateral=True)
+    prep_m4 = DefectPreprocessor.from_yaml(use_clahe=True, use_bilateral=True)
 
     gc10_test_m1 = DataLoader(
         GC10Dataset(gc10_dir / "test" / "images", gc10_dir / "test" / "labels", preprocessor=None),
@@ -111,12 +112,40 @@ def run_domain_adaptation_benchmark(
     print(f"  M1 Adapted mAP@0.5: {m1_adapt['mAP@0.5']:.4f}")
     print(f"  M4 Adapted mAP@0.5: {m4_adapt['mAP@0.5']:.4f}")
 
-    # Save summary
-    neu_m1_map = 0.3978
-    neu_m4_map = 0.4163
+    # Source domain (NEU-DET) baseline performance: dynamically load from summary or evaluate directly
+    neu_m1_map = None
+    neu_m4_map = None
+    ablation_summary_path = Path("reports/training_ablation_summary.json")
+    if ablation_summary_path.exists():
+        try:
+            with open(ablation_summary_path, "r", encoding="utf-8") as f:
+                ab_data = json.load(f)
+                if "M1" in ab_data and "mAP@0.5" in ab_data["M1"]:
+                    neu_m1_map = float(ab_data["M1"]["mAP@0.5"])
+                if "M4" in ab_data and "mAP@0.5" in ab_data["M4"]:
+                    neu_m4_map = float(ab_data["M4"]["mAP@0.5"])
+        except (OSError, json.JSONDecodeError):
+            pass
+
+    # If not found in summary, compute live on NEU-DET test split
+    if neu_m1_map is None or neu_m4_map is None:
+        print("\nEvaluating source domain baseline directly on NEU-DET test set...")
+        from src.dataset.loader import create_dataloaders
+        from src.evaluation.metrics import evaluate_model_on_loader
+        _, _, neu_test_m1 = create_dataloaders(data_dir="data/NEU-DET", batch_size=16, num_workers=2)
+        _, _, neu_test_m4 = create_dataloaders(data_dir="data/NEU-DET", preprocessor=prep_m4, batch_size=16, num_workers=2)
+        if neu_m1_map is None:
+            m1_neu = evaluate_model_on_loader(m1, neu_test_m1, device=device)
+            neu_m1_map = m1_neu["mAP@0.5"]
+        if neu_m4_map is None:
+            m4_neu = evaluate_model_on_loader(m4, neu_test_m4, device=device)
+            neu_m4_map = m4_neu["mAP@0.5"]
 
     summary = {
-        "dataset": "GC10-DET",
+        "dataset": "GC10-DET-Synthetic",
+        "is_synthetic": True,
+        "note": "Synthetic metal defect benchmark simulating cross-domain steel inspection with directional texture and defect patterns.",
+        "class_mapping_policy": "Heuristic morphological proxy (NEU 6 classes to GC10 10 classes)",
         "num_classes": len(GC10_CLASSES),
         "zero_shot_evaluation": {
             "M1_Baseline": {
@@ -192,7 +221,7 @@ def run_domain_adaptation_benchmark(
     ax2.plot(epochs_range, m4_adapt["loss_history"], marker="s", linewidth=2, color="#dc2626", label=f"M4 Loss ({m4_adapt['mAP@0.5']*100:.1f}% mAP)")
     ax2.set_xlabel("Adaptation Epoch", fontweight="bold", fontsize=11)
     ax2.set_ylabel("Adaptation Multi-Task Loss", fontweight="bold", fontsize=11)
-    ax2.set_title(f"Few-Shot GC10-DET Fine-Tuning Convergence", fontweight="bold", fontsize=12, pad=10)
+    ax2.set_title("Few-Shot GC10-DET Fine-Tuning Convergence", fontweight="bold", fontsize=12, pad=10)
     ax2.legend(frameon=True, facecolor="white")
     ax2.grid(True, linestyle="--", alpha=0.5)
 

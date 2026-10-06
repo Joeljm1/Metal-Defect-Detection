@@ -3,12 +3,13 @@ Bounding Box and Dataset Annotation Parsing Utilities.
 """
 
 from pathlib import Path
-from typing import List, Tuple, Dict, Optional
-import torch
+from typing import Any
+
 import numpy as np
+import torch
+import yaml
 
-
-CLASS_NAMES = [
+DEFAULT_CLASS_NAMES = [
     "crazing",
     "inclusion",
     "patches",
@@ -17,6 +18,34 @@ CLASS_NAMES = [
     "scratches",
 ]
 
+
+def load_dataset_config(config_path: str | Path | None = None) -> dict[str, Any]:
+    """
+    Search and load the dataset configuration from configs/dataset.yaml.
+    """
+    if config_path:
+        p = Path(config_path)
+        if p.exists():
+            with open(p, "r", encoding="utf-8") as f:
+                return yaml.safe_load(f) or {}
+
+    search_paths = [
+        Path("configs/dataset.yaml"),
+        Path("../configs/dataset.yaml"),
+        Path(__file__).resolve().parent.parent.parent / "configs" / "dataset.yaml",
+    ]
+    for p in search_paths:
+        if p.exists():
+            try:
+                with open(p, "r", encoding="utf-8") as f:
+                    return yaml.safe_load(f) or {}
+            except (OSError, yaml.YAMLError):
+                continue
+    return {}
+
+
+_DATASET_CFG = load_dataset_config()
+CLASS_NAMES = list(_DATASET_CFG.get("classes", DEFAULT_CLASS_NAMES))
 CLASS_TO_IDX = {name: idx for idx, name in enumerate(CLASS_NAMES)}
 IDX_TO_CLASS = {idx: name for idx, name in enumerate(CLASS_NAMES)}
 

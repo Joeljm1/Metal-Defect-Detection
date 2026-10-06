@@ -7,25 +7,22 @@ Evaluates model robustness under industrial domain shift:
 3. Comparative resilience: M1 (Plain Baseline) vs M4 (CLAHE + Bilateral + Attention).
 """
 
-from pathlib import Path
-from typing import List, Dict, Tuple, Optional, Any
-import json
 import random
-import numpy as np
-import cv2
-import torch
-import torch.nn as nn
-from torch.utils.data import Dataset, DataLoader
+from pathlib import Path
+from typing import Any
 
+import cv2
+import numpy as np
+import torch
+from torch import nn
+from torch.utils.data import DataLoader, Dataset
+
+from src.evaluation.metrics import evaluate_detections, evaluate_model_on_loader
 from src.models.detector import DefectDetector
 from src.models.head import DetectHead
-from src.evaluation.metrics import evaluate_model_on_loader, evaluate_detections
-from src.dataset.loader import yolo_collate_fn
 from src.training.loss import ComputeLoss
-from src.preprocessing.pipeline import DefectPreprocessor
 
-
-GC10_CLASSES: List[str] = [
+GC10_CLASSES: list[str] = [
     "punch_hole",
     "welding_line",
     "crescent_gap",
@@ -38,8 +35,12 @@ GC10_CLASSES: List[str] = [
     "waist_folding",
 ]
 
-# Morphological cross-domain mapping between NEU-DET (6 classes) and GC10-DET (10 classes)
-NEU_TO_GC10_MAPPING: Dict[str, str] = {
+# Heuristic morphological cross-domain mapping between NEU-DET (6 source classes)
+# and GC10-DET (10 target classes).
+# Note: Because the evaluation benchmark is synthetic (GC10-DET-Synthetic) with 10 classes,
+# this mapping serves as a geometric and textural heuristic proxy rather than a 1:1 physical
+# taxonomy (e.g. matching linear deformities to crease, indentation pits to rolled_pit).
+NEU_TO_GC10_MAPPING: dict[str, str] = {
     "inclusion": "inclusion",            # Exact physical defect match
     "pitted_surface": "rolled_pit",      # Surface indentation / pit depressions
     "scratches": "crease",               # Linear directional surface deformities
@@ -59,8 +60,8 @@ class GC10Dataset(Dataset):
         self,
         image_dir: Path | str,
         label_dir: Path | str,
-        target_size: Tuple[int, int] = (200, 200),
-        preprocessor: Optional[Any] = None,
+        target_size: tuple[int, int] = (200, 200),
+        preprocessor: Any | None = None,
         is_training: bool = False,
     ):
         self.image_dir = Path(image_dir)
@@ -76,7 +77,7 @@ class GC10Dataset(Dataset):
     def __len__(self) -> int:
         return len(self.image_paths)
 
-    def __getitem__(self, idx: int) -> Tuple[torch.Tensor, torch.Tensor, str]:
+    def __getitem__(self, idx: int) -> tuple[torch.Tensor, torch.Tensor, str]:
         img_path = self.image_paths[idx]
         bgr = cv2.imread(str(img_path))
         if bgr is None:
@@ -189,8 +190,7 @@ def generate_synthetic_gc10_benchmark(
                 filename = f"gc10_{cls_name}_{i:03d}"
                 cv2.imwrite(str(img_out / f"{filename}.jpg"), cv2.cvtColor(img, cv2.COLOR_RGB2BGR))
                 with open(lbl_out / f"{filename}.txt", "w", encoding="utf-8") as f:
-                    for b in boxes:
-                        f.write(f"{b[0]} {b[1]:.4f} {b[2]:.4f} {b[3]:.4f} {b[4]:.4f}\n")
+                    f.writelines(f"{b[0]} {b[1]:.4f} {b[2]:.4f} {b[3]:.4f} {b[4]:.4f}\n" for b in boxes)
 
     return base_dir
 
@@ -214,36 +214,66 @@ class DomainAdaptedDetector(nn.Module):
         self.preprocessor = base_model.preprocessor
         self.backbone = base_model.backbone
         self.neck = base_model.neck
+        self.freeze_backbone = freeze_backbone
+        self.freeze_neck = freeze_neck
+        self.img_size = getattr(base_model, "img_size", (200, 200))
 
         if freeze_backbone:
             for p in self.backbone.parameters():
                 p.requires_grad = False
+            self.backbone.eval()
+            for m in self.backbone.modules():
+                if isinstance(m, nn.BatchNorm2d):
+                    m.eval()
         if freeze_neck:
             for p in self.neck.parameters():
                 p.requires_grad = False
+            self.neck.eval()
+            for m in self.neck.modules():
+                if isinstance(m, nn.BatchNorm2d):
+                    m.eval()
 
         # Re-initialize head with target number of defect classes (10)
         self.head = DetectHead(
             num_classes=num_target_classes,
             in_channels=self.neck.out_channels,
             anchors=base_model.head.anchors.cpu().numpy().tolist(),
+            img_size=self.img_size,
         )
 
+    def train(self, mode: bool = True):
+        super().train(mode)
+        if mode:
+            if self.freeze_backbone:
+                self.backbone.eval()
+                for m in self.backbone.modules():
+                    if isinstance(m, nn.BatchNorm2d):
+                        m.eval()
+            if self.freeze_neck:
+                self.neck.eval()
+                for m in self.neck.modules():
+                    if isinstance(m, nn.BatchNorm2d):
+                        m.eval()
+        return self
+
     def forward(self, x: torch.Tensor):
+        img_size = (x.shape[3], x.shape[2]) if x.dim() >= 4 else getattr(self, "img_size", (200, 200))
         features = self.backbone(x)
         fused = self.neck(features)
-        return self.head(fused)
+        return self.head(fused, img_size=img_size)
 
 
 def evaluate_zero_shot_domain_transfer(
     model: DefectDetector,
     gc10_test_loader: DataLoader,
-    device: torch.device | str = "cuda" if torch.cuda.is_available() else "cpu",
-) -> Dict[str, Any]:
+    device: torch.device | str | None = None,
+) -> dict[str, Any]:
     """
     Evaluates zero-shot cross-domain transferability on overlapping/analogue classes.
     Maps predicted NEU-DET class scores to the closest morphological GC10-DET category.
     """
+    if device is None:
+        device = "cuda" if torch.cuda.is_available() else "cpu"
     model.eval()
     neu_classes = ["crazing", "inclusion", "patches", "pitted_surface", "rolled-in_scale", "scratches"]
 
@@ -287,7 +317,13 @@ def evaluate_zero_shot_domain_transfer(
                 all_preds.append(nms_preds[b_idx].cpu())
                 all_targets.append(boxes)
 
-    metrics = evaluate_detections(all_preds, all_targets, iou_threshold=0.5, num_classes=len(GC10_CLASSES))
+    metrics = evaluate_detections(
+        all_preds,
+        all_targets,
+        iou_threshold=0.5,
+        num_classes=len(GC10_CLASSES),
+        class_names=GC10_CLASSES,
+    )
     return metrics
 
 
@@ -297,11 +333,13 @@ def train_few_shot_adaptation(
     gc10_test_loader: DataLoader,
     epochs: int = 10,
     lr: float = 1e-3,
-    device: torch.device | str = "cuda" if torch.cuda.is_available() else "cpu",
-) -> Dict[str, Any]:
+    device: torch.device | str | None = None,
+) -> dict[str, Any]:
     """
     Fine-tunes the adapted model on few-shot GC10-DET samples.
     """
+    if device is None:
+        device = "cuda" if torch.cuda.is_available() else "cpu"
     adapted_model.to(device)
     adapted_model.train()
 
@@ -333,7 +371,11 @@ def train_few_shot_adaptation(
     # Evaluate on GC10 test set
     adapted_model.eval()
     test_metrics = evaluate_model_on_loader(
-        adapted_model, gc10_test_loader, device=device, num_classes=len(GC10_CLASSES)
+        adapted_model,
+        gc10_test_loader,
+        device=device,
+        num_classes=len(GC10_CLASSES),
+        class_names=GC10_CLASSES,
     )
     return {
         "final_train_loss": loss_history[-1],

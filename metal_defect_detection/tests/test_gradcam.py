@@ -1,7 +1,8 @@
-import torch
 import numpy as np
-from src.models.detector import DefectDetector
+import torch
+
 from src.evaluation.gradcam import DefectGradCAM
+from src.models.detector import DefectDetector
 
 
 def test_gradcam_instantiation_and_forward():

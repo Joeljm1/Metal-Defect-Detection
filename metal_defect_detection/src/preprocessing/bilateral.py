@@ -7,7 +7,6 @@ Bilateral filtering smooths high-frequency grain noise while strictly preserving
 defect edges by weighting pixels based on both spatial distance and radiometric intensity difference.
 """
 
-from typing import Union
 import cv2
 import numpy as np
 

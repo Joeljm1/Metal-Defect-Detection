@@ -4,10 +4,11 @@ Unit test for evaluate script workflow.
 
 import tempfile
 from pathlib import Path
+
 import torch
 
-from src.models.detector import DefectDetector
 from scripts.evaluate import run_evaluation
+from src.models.detector import DefectDetector
 
 
 def test_evaluate_script_run():

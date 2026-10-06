@@ -3,8 +3,9 @@ Generate Convergence Training Loss Curves for Task 5.
 Plots train and validation loss across M1, M2, M3, and M4.
 """
 
-from pathlib import Path
 import json
+from pathlib import Path
+
 import matplotlib.pyplot as plt
 
 
@@ -29,20 +30,22 @@ def plot_loss_curves(
     labels = {
         "M1": "M1 (Baseline Plain YOLOv5s)",
         "M2": "M2 (Baseline + CLAHE & Bilateral)",
-        "M3": "M3 (Baseline + ECA Attention)",
+        "M3": "M3 (Baseline + ECA/Spatial Attention)",
         "M4": "M4 (Proposed Integrated Model)",
     }
 
+    max_epochs = 0
     for var, info in data.items():
         epochs = list(range(1, len(info["history"]["train_loss"]) + 1))
+        max_epochs = max(max_epochs, len(epochs))
         ax1.plot(
             epochs,
             info["history"]["train_loss"],
             marker="o",
             markersize=3,
             linewidth=2,
-            label=labels[var],
-            color=colors[var],
+            label=labels.get(var, var),
+            color=colors.get(var, "#6b7280"),
         )
         ax2.plot(
             epochs,
@@ -50,11 +53,11 @@ def plot_loss_curves(
             marker="s",
             markersize=3,
             linewidth=2,
-            label=labels[var],
-            color=colors[var],
+            label=labels.get(var, var),
+            color=colors.get(var, "#6b7280"),
         )
 
-    ax1.set_title("Training Loss Convergence (15 Epochs)", fontsize=12, fontweight="bold", pad=10)
+    ax1.set_title(f"Training Loss Convergence ({max_epochs} Epochs)", fontsize=12, fontweight="bold", pad=10)
     ax1.set_xlabel("Epoch", fontsize=10, fontweight="bold")
     ax1.set_ylabel("Total Loss (CIoU + BCE Obj + BCE Cls)", fontsize=10, fontweight="bold")
     ax1.grid(True, linestyle="--", alpha=0.5)

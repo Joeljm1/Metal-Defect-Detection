@@ -16,17 +16,18 @@ Saves:
 - reports/figures/edge_latency_quantization.png
 """
 
-from pathlib import Path
-from typing import Dict, Any
 import json
+from pathlib import Path
+from typing import Any
+
 import matplotlib.pyplot as plt
 import numpy as np
 import torch
 from rich.console import Console
 from rich.table import Table
 
+from src.deployment.export import benchmark_edge_runtime, export_model_to_onnx
 from src.models.detector import DefectDetector
-from src.deployment.export import export_model_to_onnx, benchmark_edge_runtime
 
 
 def run_export_and_benchmark(
@@ -34,7 +35,7 @@ def run_export_and_benchmark(
     summary_path: Path | str = Path("reports/onnx_benchmark_summary.json"),
     figure_path: Path | str = Path("reports/figures/edge_latency_quantization.png"),
     benchmark_runs: int = 100,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     console = Console()
     output_dir = Path(output_dir)
     summary_path = Path(summary_path)
@@ -117,7 +118,7 @@ def run_export_and_benchmark(
     m1_data = all_benchmarks["M1"]["formats"]
     m4_data = all_benchmarks["M4"]["formats"]
 
-    common_formats = [f for f in m4_data.keys() if f in m1_data]
+    common_formats = [f for f in m4_data if f in m1_data]
     format_labels = [f.replace("_", " ").upper() for f in common_formats]
 
     m1_latencies = [m1_data[f]["mean_latency_ms"] for f in common_formats]

@@ -3,9 +3,8 @@ Unit tests for Lightweight Attention Modules (ECA, Spatial Attention).
 """
 
 import torch
-import pytest
 
-from src.models.attention import ECABlock, SpatialAttentionBlock, ECASpatialAttention
+from src.models.attention import ECABlock, ECASpatialAttention, SpatialAttentionBlock
 
 
 def test_eca_block_forward_and_backward():

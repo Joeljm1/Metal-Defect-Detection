@@ -3,14 +3,13 @@ Visualization Utilities for Defect Inspection and Preprocessing Stages.
 """
 
 from pathlib import Path
-from typing import List, Optional, Tuple, Union
+
 import cv2
-import numpy as np
 import matplotlib.pyplot as plt
+import numpy as np
 import torch
 
 from src.dataset.parser import CLASS_NAMES, xywh_to_xyxy
-
 
 CLASS_COLORS = [
     (230, 25, 75),    # Crazing - Red
@@ -24,9 +23,9 @@ CLASS_COLORS = [
 
 def draw_bounding_boxes(
     image: np.ndarray,
-    boxes: Union[np.ndarray, torch.Tensor],
+    boxes: np.ndarray | torch.Tensor,
     box_format: str = "auto",
-    is_normalized_xywh: Optional[bool] = None,
+    is_normalized_xywh: bool | None = None,
     show_labels: bool = True,
 ) -> np.ndarray:
     """
@@ -60,9 +59,7 @@ def draw_bounding_boxes(
                 else:
                     fmt = "nms"
             elif len(b) == 5:
-                if is_normalized_xywh is True:
-                    fmt = "yolo"
-                elif float(b[0]).is_integer() and 0 <= b[0] < len(CLASS_NAMES) and all(0 <= v <= 1.0 for v in b[1:5]):
+                if is_normalized_xywh is True or float(b[0]).is_integer() and 0 <= b[0] < len(CLASS_NAMES) and all(0 <= v <= 1.0 for v in b[1:5]):
                     fmt = "yolo"
                 elif float(b[4]).is_integer() and 0 <= b[4] < len(CLASS_NAMES):
                     fmt = "xyxy"
@@ -89,7 +86,7 @@ def draw_bounding_boxes(
             conf = float(b[5]) if len(b) > 5 else None
 
         color = CLASS_COLORS[cls_id % len(CLASS_COLORS)]
-        xmin, ymin, xmax, ymax = [int(round(v)) for v in box_xyxy]
+        xmin, ymin, xmax, ymax = [round(v) for v in box_xyxy]
         cv2.rectangle(canvas, (xmin, ymin), (xmax, ymax), color, 2)
 
         if show_labels:
@@ -98,7 +95,7 @@ def draw_bounding_boxes(
             label_text = f"{cls_name}{conf_str}"
 
             # Text background badge
-            (tw, th), baseline = cv2.getTextSize(label_text, cv2.FONT_HERSHEY_SIMPLEX, 0.45, 1)
+            (tw, th), _baseline = cv2.getTextSize(label_text, cv2.FONT_HERSHEY_SIMPLEX, 0.45, 1)
             cv2.rectangle(canvas, (xmin, max(0, ymin - th - 4)), (xmin + tw + 4, ymin), color, -1)
             cv2.putText(
                 canvas,
@@ -117,7 +114,7 @@ def draw_bounding_boxes(
 def plot_preprocessing_comparison(
     stages: dict,
     title: str = "Preprocessing Stages Comparison",
-    save_path: Optional[Union[str, Path]] = None,
+    save_path: str | Path | None = None,
 ) -> None:
     """
     Plot Raw vs Bilateral vs CLAHE vs Enhanced side-by-side with histogram analysis.

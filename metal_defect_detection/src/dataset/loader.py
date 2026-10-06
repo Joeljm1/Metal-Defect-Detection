@@ -2,15 +2,16 @@
 PyTorch Dataset and DataLoader for NEU-DET Metal Surface Defect Detection.
 """
 
-from pathlib import Path
-from typing import Optional, Callable, List, Tuple, Dict, Any
 import random
+from collections.abc import Callable
+from pathlib import Path
+
 import cv2
 import numpy as np
 import torch
-from torch.utils.data import Dataset, DataLoader
+from torch.utils.data import DataLoader, Dataset
 
-from src.dataset.parser import parse_yolo_label_file, CLASS_NAMES
+from src.dataset.parser import parse_yolo_label_file
 
 
 class NEUDataset(Dataset):
@@ -22,11 +23,11 @@ class NEUDataset(Dataset):
         self,
         image_dir: str | Path,
         label_dir: str | Path,
-        preprocessor: Optional[Callable[[np.ndarray], np.ndarray]] = None,
-        target_size: Tuple[int, int] = (200, 200),
+        preprocessor: Callable[[np.ndarray], np.ndarray] | None = None,
+        target_size: tuple[int, int] = (200, 200),
         is_training: bool = False,
         augment: bool = False,
-        image_paths: Optional[List[Path]] = None,
+        image_paths: list[Path] | None = None,
     ):
         self.image_dir = Path(image_dir)
         self.label_dir = Path(label_dir)
@@ -52,7 +53,7 @@ class NEUDataset(Dataset):
 
     def _apply_augmentations(
         self, image: np.ndarray, labels: torch.Tensor
-    ) -> Tuple[np.ndarray, torch.Tensor]:
+    ) -> tuple[np.ndarray, torch.Tensor]:
         """
         Lightweight geometric and photometric augmentations for training.
         """
@@ -70,7 +71,7 @@ class NEUDataset(Dataset):
 
         return image, labels
 
-    def __getitem__(self, idx: int) -> Tuple[torch.Tensor, torch.Tensor, str]:
+    def __getitem__(self, idx: int) -> tuple[torch.Tensor, torch.Tensor, str]:
         img_path = self.image_paths[idx]
         image = cv2.imread(str(img_path))
         if image is None:
@@ -102,8 +103,8 @@ class NEUDataset(Dataset):
 
 
 def yolo_collate_fn(
-    batch: List[Tuple[torch.Tensor, torch.Tensor, str]]
-) -> Tuple[torch.Tensor, torch.Tensor, List[str]]:
+    batch: list[tuple[torch.Tensor, torch.Tensor, str]]
+) -> tuple[torch.Tensor, torch.Tensor, list[str]]:
     """
     Collate function to batch images and assemble variable-length targets.
     
@@ -129,14 +130,14 @@ def yolo_collate_fn(
 
 def create_dataloaders(
     data_dir: str | Path,
-    preprocessor: Optional[Callable] = None,
+    preprocessor: Callable | None = None,
     batch_size: int = 16,
     num_workers: int = 2,
-    target_size: Tuple[int, int] = (200, 200),
+    target_size: tuple[int, int] = (200, 200),
     augment_train: bool = True,
     val_fraction: float = 0.1,
     split_seed: int = 42,
-) -> Tuple[DataLoader, DataLoader, DataLoader]:
+) -> tuple[DataLoader, DataLoader, DataLoader]:
     """
     Factory function to create train, validation, and test DataLoaders.
 
@@ -160,7 +161,7 @@ def create_dataloaders(
     ).image_paths
     indices = list(range(len(all_train_paths)))
     random.Random(split_seed).shuffle(indices)
-    n_val = int(round(len(indices) * val_fraction))
+    n_val = round(len(indices) * val_fraction)
     if len(indices) > 1:
         n_val = min(max(n_val, 1), len(indices) - 1)
     else:

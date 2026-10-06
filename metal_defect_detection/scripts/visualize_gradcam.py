@@ -5,14 +5,14 @@ Baseline (M1) vs Proposed Integrated Model with ECA Attention (M4).
 """
 
 from pathlib import Path
+
 import cv2
-import numpy as np
 import matplotlib.pyplot as plt
 import torch
 
-from src.models.detector import DefectDetector
-from src.evaluation.gradcam import DefectGradCAM
 from src.dataset.parser import CLASS_NAMES
+from src.evaluation.gradcam import DefectGradCAM
+from src.models.detector import DefectDetector
 
 
 def generate_gradcam_gallery(
@@ -40,9 +40,11 @@ def generate_gradcam_gallery(
     selected_images = {}
     for img_p in sorted(data_dir.iterdir()):
         for cls_idx, cls_name in enumerate(CLASS_NAMES):
-            if cls_name.lower().replace("-", "_") in img_p.stem.lower().replace("-", "_"):
-                if cls_name not in selected_images:
-                    selected_images[cls_name] = (cls_idx, img_p)
+            if (
+                cls_name.lower().replace("-", "_") in img_p.stem.lower().replace("-", "_")
+                and cls_name not in selected_images
+            ):
+                selected_images[cls_name] = (cls_idx, img_p)
 
     fig, axes = plt.subplots(6, 4, figsize=(14, 18), dpi=150)
     fig.patch.set_facecolor("#fafbfc")
@@ -63,11 +65,13 @@ def generate_gradcam_gallery(
 
         # Read image
         bgr = cv2.imread(str(img_path))
+        if bgr is None:
+            continue
         rgb = cv2.cvtColor(bgr, cv2.COLOR_BGR2RGB)
         rgb_resized = cv2.resize(rgb, (200, 200))
 
         # Preprocessed version
-        prep_rgb = m4.preprocessor.process(rgb_resized)
+        prep_rgb = m4.preprocessor.process(rgb_resized) if m4.preprocessor is not None else rgb_resized
 
         # To tensor
         t_m1 = torch.from_numpy(rgb_resized).permute(2, 0, 1).unsqueeze(0).float().to(device) / 255.0

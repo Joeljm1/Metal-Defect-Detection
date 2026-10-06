@@ -2,17 +2,19 @@
 CLI to run Exploratory Data Analysis on NEU-DET.
 """
 
-from pathlib import Path
 import argparse
+
 from rich.console import Console
 from rich.table import Table
 
 from src.dataset.eda import run_dataset_eda
+from src.dataset.parser import load_dataset_config
 
 
 def main():
+    default_data_dir = load_dataset_config().get("path", "data/NEU-DET")
     parser = argparse.ArgumentParser(description="NEU-DET Exploratory Data Analysis")
-    parser.add_argument("--data-dir", type=str, default="data/NEU-DET", help="Path to NEU-DET root")
+    parser.add_argument("--data-dir", type=str, default=default_data_dir, help="Path to NEU-DET root")
     parser.add_argument("--out-dir", type=str, default="reports", help="Output directory for reports")
     args = parser.parse_args()
 

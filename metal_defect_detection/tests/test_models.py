@@ -3,12 +3,10 @@ Unit tests for Detector Architecture and Ablation Models (M1 to M4).
 """
 
 import torch
-import pytest
 
 from src.models.backbone import CSPDarknetBackbone
-from src.models.neck import PANetNeck
-from src.models.head import DetectHead
 from src.models.detector import DefectDetector
+from src.models.neck import PANetNeck
 
 
 def test_backbone_feature_scales():
@@ -52,17 +50,19 @@ def test_ablation_variants_forward_pass():
     for var in variants:
         model = DefectDetector.build_model(variant=var, num_classes=6)
 
-        # Training mode: returns raw head outputs (list of 3 tensors)
+        # Training mode: returns (decoded_boxes, raw_head_outputs) consistently
         model.train()
-        train_out = model(x)
-        assert isinstance(train_out, list)
-        assert len(train_out) == 3
-        assert train_out[0].shape[-1] == 5 + 6  # 11 channels: 4 bbox + 1 obj + 6 cls
+        train_decoded, train_raw = model(x)
+        assert isinstance(train_decoded, torch.Tensor)
+        assert isinstance(train_raw, list)
+        assert len(train_raw) == 3
+        assert train_raw[0].shape[-1] == 5 + 6  # 11 channels: 4 bbox + 1 obj + 6 cls
 
-        # Eval mode: returns (decoded_boxes, raw_outputs)
+        # Eval mode: returns (decoded_boxes, raw_outputs) consistently
         model.eval()
         with torch.no_grad():
-            eval_out, _ = model(x)
-            assert isinstance(eval_out, torch.Tensor)
-            assert eval_out.shape[0] == 2
-            assert eval_out.shape[2] == 5 + 6
+            eval_decoded, eval_raw = model(x)
+            assert isinstance(eval_decoded, torch.Tensor)
+            assert isinstance(eval_raw, list)
+            assert eval_decoded.shape[0] == 2
+            assert eval_decoded.shape[2] == 5 + 6

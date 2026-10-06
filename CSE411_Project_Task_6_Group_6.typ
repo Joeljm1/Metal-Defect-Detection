@@ -47,8 +47,6 @@
   #text(weight: "bold", size: 14pt)[CSE411 COMPUTER VISION]\
   #v(0.6em)
   #text(weight: "bold", size: 14pt)[PROJECT TASK 6]\
-  #v(0.6em)
-  #text(size: 12pt)[(Implementation – Part 3: 75% Overall Milestone)]
 
   #v(3.2cm)
 
@@ -82,7 +80,7 @@
 #text(weight: "bold", size: 12.5pt)[1. Overview of the 75% Implementation Milestone]
 
 #v(0.3em)
-In accordance with the Project Task 6 specification, this submission advances the system from the intermediate 50% training and interpretability foundation (Task 5) to an integrated, fully functional *75% overall project milestone*. 
+In accordance with the Project Task 6 specification, this submission advances the system from the intermediate 50% training and interpretability foundation (Task 5) to an integrated, fully functional *75% overall project milestone*.
 
 While Task 5 established multi-epoch ablation convergence, training harness calibration, and multi-scale Grad-CAM explainability, Task 6 introduces cross-dataset domain adaptation on the external 10-class GC10-DET metallic defect benchmark (validating *Hypothesis H4*), delivers production-ready ONNX model export with dynamic batching, and benchmarks low-power edge runtime execution across multiple hardware formats (validating *Hypothesis H3*).
 
@@ -126,7 +124,7 @@ While Task 5 established multi-epoch ablation convergence, training harness cali
 ]
 
 #v(0.3em)
-*Integration and Test Rigor:* All newly developed domain adaptation, ONNX export, and runtime benchmarking modules are thoroughly integrated into the codebase and validated by automated regression tests in `pytest` (*36 passing unit and integration tests*).
+*Integration and Test Rigor:* All newly developed domain adaptation, ONNX export, and runtime benchmarking modules are thoroughly integrated into the codebase and validated by automated regression tests in `pytest` (40 passing unit and integration tests).
 
 #pagebreak()
 
@@ -245,13 +243,26 @@ Both M1 and M4 models were exported to standalone ONNX graphs with dynamic batch
     align: (left, left),
     fill: (col, row) => if row == 0 { rgb("f0f4f8") } else { none },
     [*File Path*], [*Role / Implementation Scope*],
-    [`src/evaluation/domain_adaptation.py`], [GC10-DET dataset loader, semantic mapping, zero-shot transfer, and few-shot head adaptation.],
-    [`src/deployment/export.py`], [ONNX model graph export with dynamic batching, graph validation, and edge benchmarking.],
-    [`scripts/evaluate_gc10.py`], [CLI evaluating cross-dataset transferability on GC10-DET and generating publication figures.],
-    [`scripts/export_and_benchmark_onnx.py`], [CLI exporting models to ONNX and profiling multi-format edge inference throughput.],
-    [`tests/test_domain_adaptation.py`], [Automated unit tests for GC10 dataset loading, domain mapping, and head adaptation.],
-    [`tests/test_export.py`], [Automated unit tests for ONNX graph export, session execution, and edge runtime profiling.],
-    [`checkpoints/M4_Proposed_Integrated.onnx`], [Serialized production-ready ONNX deployment graph for proposed detector (27.52 MB).],
+    [`src/evaluation/domain_adaptation.py`],
+    [GC10-DET dataset loader, semantic mapping, zero-shot transfer, and few-shot head adaptation.],
+
+    [`src/deployment/export.py`],
+    [ONNX model graph export with dynamic batching, graph validation, and edge benchmarking.],
+
+    [`scripts/evaluate_gc10.py`],
+    [CLI evaluating cross-dataset transferability on GC10-DET and generating publication figures.],
+
+    [`scripts/export_and_benchmark_onnx.py`],
+    [CLI exporting models to ONNX and profiling multi-format edge inference throughput.],
+
+    [`tests/test_domain_adaptation.py`],
+    [Automated unit tests for GC10 dataset loading, domain mapping, and head adaptation.],
+
+    [`tests/test_export.py`],
+    [Automated unit tests for ONNX graph export, session execution, and edge runtime profiling.],
+
+    [`checkpoints/M4_Proposed_Integrated.onnx`],
+    [Serialized production-ready ONNX deployment graph for proposed detector (27.52 MB).],
   )
 ]
 
@@ -261,8 +272,6 @@ Both M1 and M4 models were exported to standalone ONNX graphs with dynamic batch
 
 #text(weight: "bold", size: 12.5pt)[5. Major Tasks Remaining for 100% Final Completion (Remaining 25%)]
 
-#v(0.3em)
-Having achieved approximately 75% of the overall project lifecycle (dataset ingestion, preprocessing, architecture design, multi-epoch convergence training, ablation validation, hardware profiling, Grad-CAM interpretability, domain adaptation, and ONNX edge deployment), the remaining 25% comprises the following deliverables for Task 7:
 
 #v(0.3em)
 #align(center)[
@@ -280,9 +289,6 @@ Having achieved approximately 75% of the overall project lifecycle (dataset inge
 
     [Comprehensive End-to-End System Verification],
     [Full integration test suite covering the entire pipeline from raw image ingestion to edge inference with 100% passing tests.],
-
-    [Final Technical Manuscript & Oral Presentation],
-    [Complete final project manuscript, statistical hypothesis tests, oral presentation slide deck, and live demonstration video.],
   )
 ]
 

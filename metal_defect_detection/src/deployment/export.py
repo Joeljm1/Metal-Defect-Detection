@@ -7,15 +7,17 @@ Provides:
 3. ONNX Runtime inference sessions and benchmarking across hardware execution providers.
 """
 
-from pathlib import Path
-from typing import Dict, Any, Tuple, Optional, List, Union
+import copy
 import logging
 import time
+from pathlib import Path
+from typing import Any
+
 import numpy as np
-import torch
-import torch.nn as nn
 import onnx
 import onnxruntime as ort
+import torch
+from torch import nn
 
 from src.models.detector import DefectDetector
 from src.utils.box_ops import non_max_suppression
@@ -40,7 +42,7 @@ class ExportableDetectorWrapper(nn.Module):
 def export_model_to_onnx(
     model: DefectDetector,
     output_path: Path | str,
-    input_size: Tuple[int, int] = (200, 200),
+    input_size: tuple[int, int] = (200, 200),
     opset_version: int = 18,
     half_precision: bool = False,
     device: str = "cpu",
@@ -65,17 +67,17 @@ def export_model_to_onnx(
     model_to_export = ExportableDetectorWrapper(model).to(device).eval()
     if half_precision:
         model_to_export = model_to_export.half()
-        dummy_input = torch.randn(1, 3, *input_size, device=device, dtype=torch.float16)
+        dummy_input = torch.randn(2, 3, *input_size, device=device, dtype=torch.float16)
     else:
-        dummy_input = torch.randn(1, 3, *input_size, device=device, dtype=torch.float32)
+        dummy_input = torch.randn(2, 3, *input_size, device=device, dtype=torch.float32)
 
-    export_kwargs: Dict[str, Any] = dict(
-        export_params=True,
-        opset_version=opset_version,
-        do_constant_folding=True,
-        input_names=["images"],
-        output_names=["detections"],
-    )
+    export_kwargs: dict[str, Any] = {
+        "export_params": True,
+        "opset_version": opset_version,
+        "do_constant_folding": True,
+        "input_names": ["images"],
+        "output_names": ["detections"],
+    }
 
     # Keep exporter progress chatter out of console output
     torch_onnx_logger = logging.getLogger("torch.onnx")
@@ -92,7 +94,7 @@ def export_model_to_onnx(
             dynamic_shapes={"x": {0: torch.export.Dim("batch_size", min=1, max=64)}},
             **export_kwargs,
         )
-    except Exception:
+    except Exception:  # noqa: BLE001
         # Fallback: legacy TorchScript exporter with dynamic_axes
         torch.onnx.export(
             model_to_export,
@@ -118,7 +120,7 @@ def export_model_to_onnx(
 def create_onnx_inference_session(
     onnx_path: Path | str,
     prefer_cuda: bool = True,
-) -> Tuple[ort.InferenceSession, str]:
+) -> tuple[ort.InferenceSession, str]:
     """
     Creates an ONNX Runtime InferenceSession with optimal execution providers.
 
@@ -144,10 +146,10 @@ def create_onnx_inference_session(
 
 def predict_onnx(
     session: ort.InferenceSession,
-    image_tensor: Union[torch.Tensor, np.ndarray],
+    image_tensor: torch.Tensor | np.ndarray,
     conf_thres: float = 0.25,
     iou_thres: float = 0.45,
-) -> List[torch.Tensor]:
+) -> list[torch.Tensor]:
     """
     Executes an ONNX Runtime inference session on image tensor and applies NMS.
 
@@ -179,12 +181,12 @@ def predict_onnx(
 
 def benchmark_edge_runtime(
     model: DefectDetector,
-    onnx_path: Optional[Path | str] = None,
-    input_size: Tuple[int, int] = (200, 200),
+    onnx_path: Path | str | None = None,
+    input_size: tuple[int, int] = (200, 200),
     warmup_runs: int = 15,
     benchmark_runs: int = 100,
     device: str = "cuda" if torch.cuda.is_available() else "cpu",
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """
     Comprehensive multi-format edge benchmark comparing:
     - PyTorch FP32
@@ -192,7 +194,7 @@ def benchmark_edge_runtime(
     - ONNX Runtime (CPU)
     - ONNX Runtime (GPU/CUDA if available)
     """
-    results: Dict[str, Any] = {
+    results: dict[str, Any] = {
         "variant": model.variant_name,
         "input_size": list(input_size),
         "benchmark_runs": benchmark_runs,
@@ -200,7 +202,7 @@ def benchmark_edge_runtime(
     }
 
     # 1. PyTorch FP32 Benchmark
-    model_fp32 = model.to(device).eval()
+    model_fp32 = copy.deepcopy(model).to(device).eval()
     dummy_fp32 = torch.randn(1, 3, *input_size, device=device, dtype=torch.float32)
 
     with torch.no_grad():
@@ -222,13 +224,42 @@ def benchmark_edge_runtime(
         "mean_latency_ms": round(mean_fp32, 2),
         "std_latency_ms": round(float(np.std(times_fp32)), 2),
         "p95_latency_ms": round(float(np.percentile(times_fp32, 95)), 2),
-        "fps": round(1000.0 / mean_fp32, 1),
+        "fps": round(1000.0 / max(1e-3, mean_fp32), 1),
         "device": device,
     }
 
+    # Measure Preprocessing Latency (CLAHE + Bilateral)
+    preproc = getattr(model, "preprocessor", None)
+    if preproc is not None and getattr(model, "use_preprocessing", True):
+        dummy_uint8 = np.random.randint(0, 256, (input_size[1], input_size[0], 3), dtype=np.uint8)
+        for _ in range(warmup_runs):
+            _ = preproc.process(dummy_uint8)
+        times_preproc = []
+        for _ in range(benchmark_runs):
+            t0 = time.perf_counter()
+            _ = preproc.process(dummy_uint8)
+            times_preproc.append((time.perf_counter() - t0) * 1000.0)
+        mean_preproc_ms = float(np.mean(times_preproc))
+    else:
+        mean_preproc_ms = 0.0
+
+    # Measure NMS Postprocessing Latency
+    with torch.no_grad():
+        sample_out = model_fp32(dummy_fp32)
+        sample_decoded = sample_out[0] if isinstance(sample_out, tuple) else sample_out
+    times_nms = []
+    for _ in range(benchmark_runs):
+        t0 = time.perf_counter()
+        _ = non_max_suppression(sample_decoded, conf_thres=0.25, iou_thres=0.45)
+        times_nms.append((time.perf_counter() - t0) * 1000.0)
+    mean_nms_ms = float(np.mean(times_nms))
+
+    results["preprocessing_latency_ms"] = round(mean_preproc_ms, 2)
+    results["nms_latency_ms"] = round(mean_nms_ms, 2)
+
     # 2. PyTorch FP16 Benchmark (if CUDA available, else simulated)
     if device == "cuda":
-        model_fp16 = model.half().to("cuda").eval()
+        model_fp16 = copy.deepcopy(model).half().to("cuda").eval()
         dummy_fp16 = torch.randn(1, 3, *input_size, device="cuda", dtype=torch.float16)
 
         with torch.no_grad():
@@ -248,11 +279,9 @@ def benchmark_edge_runtime(
             "mean_latency_ms": round(mean_fp16, 2),
             "std_latency_ms": round(float(np.std(times_fp16)), 2),
             "p95_latency_ms": round(float(np.percentile(times_fp16, 95)), 2),
-            "fps": round(1000.0 / mean_fp16, 1),
+            "fps": round(1000.0 / max(1e-3, mean_fp16), 1),
             "device": "cuda",
         }
-        # Revert model to float
-        model.float()
 
     # 3. ONNX Runtime Benchmark
     if onnx_path is None:
@@ -290,7 +319,7 @@ def benchmark_edge_runtime(
         "mean_latency_ms": round(mean_onnx_cpu, 2),
         "std_latency_ms": round(float(np.std(times_onnx_cpu)), 2),
         "p95_latency_ms": round(float(np.percentile(times_onnx_cpu, 95)), 2),
-        "fps": round(1000.0 / mean_onnx_cpu, 1),
+        "fps": round(1000.0 / max(1e-3, mean_onnx_cpu), 1),
         "provider": "CPUExecutionProvider",
     }
 
@@ -316,9 +345,18 @@ def benchmark_edge_runtime(
             "mean_latency_ms": round(mean_onnx_cuda, 2),
             "std_latency_ms": round(float(np.std(times_onnx_cuda)), 2),
             "p95_latency_ms": round(float(np.percentile(times_onnx_cuda, 95)), 2),
-            "fps": round(1000.0 / mean_onnx_cuda, 1),
+            "fps": round(1000.0 / max(1e-3, mean_onnx_cuda), 1),
             "provider": "CUDAExecutionProvider",
         }
+
+    # Compute End-to-End Latency and FPS for all runtime formats (Preproc + Model + NMS)
+    for fmt_data in results["formats"].values():
+        raw_lat = fmt_data["mean_latency_ms"]
+        e2e_lat = raw_lat + mean_preproc_ms + mean_nms_ms
+        fmt_data["model_only_latency_ms"] = raw_lat
+        fmt_data["model_only_fps"] = fmt_data["fps"]
+        fmt_data["end_to_end_latency_ms"] = round(e2e_lat, 2)
+        fmt_data["end_to_end_fps"] = round(1000.0 / max(1e-3, e2e_lat), 1)
 
     if cleanup_temp and onnx_file.exists():
         onnx_file.unlink()

@@ -7,20 +7,22 @@ the shared evaluation policy: the AP curve spans the full confidence range
 (conf 0.25).
 """
 
-from pathlib import Path
 import argparse
+from pathlib import Path
+
 import torch
 from rich.console import Console
 from rich.table import Table
 
-from src.models.detector import DefectDetector
 from src.dataset.loader import create_dataloaders
-from src.preprocessing.pipeline import DefectPreprocessor
 from src.evaluation.metrics import (
     EVAL_CONF_THRES,
     REPORT_CONF_THRES,
     evaluate_model_on_loader,
 )
+from src.models.detector import DefectDetector
+from src.preprocessing.pipeline import DefectPreprocessor
+
 
 def run_evaluation(
     model_path: Path,
@@ -43,7 +45,7 @@ def run_evaluation(
 
     preprocessor = None
     if "M2" in variant or "M4" in variant or "Integrated" in variant or "Preprocessing" in variant:
-        preprocessor = DefectPreprocessor(use_clahe=True, use_bilateral=True)
+        preprocessor = DefectPreprocessor.from_yaml(use_clahe=True, use_bilateral=True)
 
     _, _, test_loader = create_dataloaders(
         data_dir=data_dir,

@@ -4,6 +4,7 @@ Unit test for Trainer class.
 
 import tempfile
 from pathlib import Path
+
 import torch
 from torch.utils.data import DataLoader, TensorDataset
 

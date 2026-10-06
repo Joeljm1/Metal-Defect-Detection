@@ -2,8 +2,8 @@
 Launcher for Streamlit Metal Defect Inspection Dashboard (Phase 6 / Task 7).
 """
 
-import sys
 import subprocess
+import sys
 from pathlib import Path
 
 

@@ -2,18 +2,19 @@
 Exploratory Data Analysis (EDA) for NEU-DET Surface Defect Dataset.
 """
 
-from pathlib import Path
-from typing import Dict, Any, List
 import json
+from pathlib import Path
+from typing import Any
+
+import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-import matplotlib.pyplot as plt
 import seaborn as sns
 
 from src.dataset.parser import CLASS_NAMES, parse_yolo_label_file
 
 
-def run_dataset_eda(dataset_path: str | Path, output_dir: str | Path) -> Dict[str, Any]:
+def run_dataset_eda(dataset_path: str | Path, output_dir: str | Path) -> dict[str, Any]:
     """
     Analyzes NEU-DET dataset statistics and generates distribution plots.
     """
@@ -70,12 +71,16 @@ def run_dataset_eda(dataset_path: str | Path, output_dir: str | Path) -> Dict[st
 
     # Compute Summary Stats
     total_images = df["image_name"].nunique()
-    defect_records = df[df["has_defects"] == True]
+    defect_records = pd.DataFrame(df[df["has_defects"] == True])
     total_boxes = len(defect_records)
     
     class_counts = defect_records["class_name"].value_counts().to_dict()
     split_counts = df.groupby("split")["image_name"].nunique().to_dict()
     boxes_per_split = defect_records.groupby("split").size().to_dict()
+
+    w_arr = np.asarray(defect_records["w"], dtype=float)
+    h_arr = np.asarray(defect_records["h"], dtype=float)
+    area_arr = np.asarray(defect_records["area"], dtype=float)
 
     summary = {
         "dataset_name": "NEU-DET",
@@ -86,12 +91,12 @@ def run_dataset_eda(dataset_path: str | Path, output_dir: str | Path) -> Dict[st
         "boxes_per_split": boxes_per_split,
         "defect_class_distribution": class_counts,
         "bbox_metrics": {
-            "mean_normalized_width": float(defect_records["w"].mean()),
-            "std_normalized_width": float(defect_records["w"].std()),
-            "mean_normalized_height": float(defect_records["h"].mean()),
-            "std_normalized_height": float(defect_records["h"].std()),
-            "mean_area": float(defect_records["area"].mean()),
-            "median_area": float(defect_records["area"].median()),
+            "mean_normalized_width": float(np.mean(w_arr)) if len(w_arr) else 0.0,
+            "std_normalized_width": float(np.std(w_arr)) if len(w_arr) else 0.0,
+            "mean_normalized_height": float(np.mean(h_arr)) if len(h_arr) else 0.0,
+            "std_normalized_height": float(np.std(h_arr)) if len(h_arr) else 0.0,
+            "mean_area": float(np.mean(area_arr)) if len(area_arr) else 0.0,
+            "median_area": float(np.median(area_arr)) if len(area_arr) else 0.0,
         }
     }
 
@@ -102,7 +107,7 @@ def run_dataset_eda(dataset_path: str | Path, output_dir: str | Path) -> Dict[st
 
     # Plot Visualizations
     plt.style.use("seaborn-v0_8-whitegrid" if "seaborn-v0_8-whitegrid" in plt.style.available else "default")
-    fig, axes = plt.subplots(2, 2, figsize=(14, 10))
+    _fig, axes = plt.subplots(2, 2, figsize=(14, 10))
 
     # 1. Class distribution bar chart
     sns.countplot(
@@ -119,7 +124,8 @@ def run_dataset_eda(dataset_path: str | Path, output_dir: str | Path) -> Dict[st
 
     # 2. Box Area distribution
     sns.histplot(
-        defect_records["area"],
+        data=defect_records,
+        x="area",
         bins=30,
         kde=True,
         color="crimson",
@@ -145,7 +151,7 @@ def run_dataset_eda(dataset_path: str | Path, output_dir: str | Path) -> Dict[st
     axes[1, 0].legend(bbox_to_anchor=(1.02, 1), loc="upper left", fontsize=8)
 
     # 4. Box distribution across splits
-    split_class_df = defect_records.groupby(["split", "class_name"]).size().reset_index(name="count")
+    split_class_df = pd.DataFrame(defect_records.groupby(["split", "class_name"]).size().reset_index()).rename(columns={0: "count"})
     sns.barplot(
         data=split_class_df,
         x="class_name",

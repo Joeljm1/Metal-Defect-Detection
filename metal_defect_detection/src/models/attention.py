@@ -10,15 +10,15 @@ Implements:
 """
 
 import math
+
 import torch
-import torch.nn as nn
-import torch.nn.functional as F
+from torch import nn
 
 
 class ECABlock(nn.Module):
     """
     Efficient Channel Attention (ECA) block (Wang et al., CVPR 2020).
-    
+
     Generates channel attention via fast 1D convolution with adaptive kernel size k,
     proportional to channel dimension C:
         k = |(log2(C) / gamma) + (b / gamma)|_odd
@@ -43,8 +43,6 @@ class ECABlock(nn.Module):
         self.sigmoid = nn.Sigmoid()
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        # x: (B, C, H, W)
-        b, c, h, w = x.shape
         # Global average pooling: (B, C, 1, 1) -> squeeze to (B, 1, C)
         y = self.avg_pool(x).squeeze(-1).transpose(-1, -2)
         # 1D convolution along channel dimension: (B, 1, C)
@@ -58,7 +56,7 @@ class ECABlock(nn.Module):
 class SpatialAttentionBlock(nn.Module):
     """
     Spatial Attention Module (SAM).
-    
+
     Extracts spatial importance maps by aggregating channel statistics via
     mean and max pooling, followed by a spatial convolution and sigmoid gating.
     """
@@ -91,19 +89,37 @@ class SpatialAttentionBlock(nn.Module):
 class ECASpatialAttention(nn.Module):
     """
     Combined Lightweight ECA Channel + Spatial Attention Block.
-    
+
     Applies channel attention first to focus on 'what' defect features are relevant,
     followed by spatial attention to pinpoint 'where' subtle defects are located.
+    Supports enabling either or both mechanisms independently.
     Equipped with a residual shortcut to guarantee stable gradient flow.
     """
 
-    def __init__(self, channels: int, gamma: int = 2, b: int = 1, spatial_kernel: int = 7):
+    def __init__(
+        self,
+        channels: int,
+        gamma: int = 2,
+        b: int = 1,
+        spatial_kernel: int = 7,
+        use_eca: bool = True,
+        use_spatial: bool = True,
+    ):
         super().__init__()
-        self.channel_att = ECABlock(channels=channels, gamma=gamma, b=b)
-        self.spatial_att = SpatialAttentionBlock(kernel_size=spatial_kernel)
+        self.use_eca = use_eca
+        self.use_spatial = use_spatial
+        self.channel_att = (
+            ECABlock(channels=channels, gamma=gamma, b=b) if use_eca else None
+        )
+        self.spatial_att = (
+            SpatialAttentionBlock(kernel_size=spatial_kernel) if use_spatial else None
+        )
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         residual = x
-        out = self.channel_att(x)
-        out = self.spatial_att(out)
+        out = x
+        if self.channel_att is not None:
+            out = self.channel_att(out)
+        if self.spatial_att is not None:
+            out = self.spatial_att(out)
         return residual + out

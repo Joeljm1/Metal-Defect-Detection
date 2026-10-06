@@ -11,15 +11,17 @@ Usage:
     uv run python scripts/cluster_anchors.py --output reports/anchors.json
 """
 
-from pathlib import Path
 import argparse
 import json
 import random
-from typing import List
+from pathlib import Path
 
 import numpy as np
 
-PIXEL_SIZE = 200  # NEU-DET images are 200x200; anchors are reported in pixels
+from src.dataset.parser import load_dataset_config
+
+_DATASET_CFG = load_dataset_config()
+PIXEL_SIZE = _DATASET_CFG.get("image_size", [200, 200])[0]  # Image width/height in pixels
 
 
 def load_box_wh(label_dir: Path, img_size: int = PIXEL_SIZE) -> np.ndarray:
@@ -59,7 +61,7 @@ def kmeans(boxes: np.ndarray, k: int = 9, iters: int = 300, seed: int = 42) -> n
     return clusters
 
 
-def group_into_scales(anchors: np.ndarray) -> List[List[List[float]]]:
+def group_into_scales(anchors: np.ndarray) -> list[list[list[float]]]:
     """Sort anchors by area and split into P3 (small) / P4 (mid) / P5 (large)."""
     order = np.argsort(anchors.prod(axis=1))
     anchors = anchors[order].round(1)
@@ -71,7 +73,7 @@ def group_into_scales(anchors: np.ndarray) -> List[List[List[float]]]:
 
 def main():
     parser = argparse.ArgumentParser(description="K-means anchor clustering for NEU-DET")
-    parser.add_argument("--data-dir", type=str, default="data/NEU-DET", help="Dataset root")
+    parser.add_argument("--data-dir", type=str, default=_DATASET_CFG.get("path", "data/NEU-DET"), help="Dataset root")
     parser.add_argument("--k", type=int, default=9, help="Number of anchors (multiple of 3)")
     parser.add_argument("--seed", type=int, default=42, help="K-means init seed")
     parser.add_argument("--output", type=str, default=None, help="Optional JSON output path")

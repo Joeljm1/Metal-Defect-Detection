@@ -2,16 +2,15 @@
 Unit tests for interactive inspection dashboard and plant operator pipeline (Task 7).
 """
 
-import numpy as np
-import torch
 import cv2
+import numpy as np
 
-from src.models.detector import DefectDetector
 from src.deployment.dashboard import (
+    CLASS_COLORS,
     load_inspection_model,
     run_defect_inspection,
-    CLASS_COLORS,
 )
+from src.models.detector import DefectDetector
 
 
 def test_class_colors():
@@ -21,11 +20,14 @@ def test_class_colors():
         assert len(CLASS_COLORS[c]) == 3
 
 
-def test_load_inspection_model():
-    model = load_inspection_model(variant="M4", device="cpu")
-    assert isinstance(model, DefectDetector)
-    assert model.use_attention is True
-    assert model.use_preprocessing is True
+def test_load_inspection_model(tmp_path):
+    import warnings
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", UserWarning)
+        model = load_inspection_model(variant="M4", checkpoint_dir=tmp_path, device="cpu")
+        assert isinstance(model, DefectDetector)
+        assert model.use_attention is True
+        assert model.use_preprocessing is True
 
 
 def test_run_defect_inspection_pipeline():

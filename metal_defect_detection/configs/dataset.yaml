@@ -27,8 +27,9 @@ channels: 3
 
 # Generalization benchmark
 generalization_dataset:
-  name: "GC10-DET"
-  description: "Held-out metallic surface defect dataset for cross-dataset evaluation (H4)"
+  name: "GC10-DET-Synthetic"
+  is_synthetic: true
+  description: "Synthetic / simulated metallic surface defect dataset for cross-dataset domain adaptation benchmark (H4)"
   num_classes: 10
   classes:
     - punch_hole

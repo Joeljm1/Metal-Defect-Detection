@@ -4,7 +4,6 @@ Unit tests for visualization utilities, verifying both NMS and YOLO box formats.
 
 import numpy as np
 import torch
-import pytest
 
 from src.utils.visualization import draw_bounding_boxes
 

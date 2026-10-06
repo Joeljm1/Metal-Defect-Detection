@@ -7,9 +7,10 @@ Combines:
 3. Defect classification loss (Binary Cross-Entropy with Logits)
 """
 
-from typing import List, Tuple, Dict, Any
+from typing import Any
+
 import torch
-import torch.nn as nn
+from torch import nn
 
 from src.utils.box_ops import bbox_ciou
 
@@ -50,10 +51,10 @@ class ComputeLoss(nn.Module):
 
     def forward(
         self,
-        predictions: List[torch.Tensor] | Tuple[torch.Tensor, List[torch.Tensor]],
+        predictions: list[torch.Tensor] | tuple[torch.Tensor, list[torch.Tensor]],
         targets: torch.Tensor,
         model: nn.Module,
-    ) -> Tuple[torch.Tensor, Dict[str, float]]:
+    ) -> tuple[torch.Tensor, dict[str, float]]:
         """
         Args:
             predictions: List of 3 raw prediction tensors [(B, na, ny, nx, no), ...]
@@ -75,7 +76,7 @@ class ComputeLoss(nn.Module):
             targets = targets[valid_cls_mask]
 
         device = targets.device if targets.numel() > 0 else predictions[0].device
-        if self.bce_obj is None or self.bce_obj.pos_weight.device != device:
+        if self.bce_obj is None or self.bce_obj.pos_weight is None or self.bce_obj.pos_weight.device != device:
             pos_weight = torch.tensor([self.obj_pos_weight], device=device)
             self.bce_obj = nn.BCEWithLogitsLoss(pos_weight=pos_weight, reduction="mean")
 
@@ -136,14 +137,19 @@ class ComputeLoss(nn.Module):
         return total_loss, loss_dict
 
     def _build_targets(
-        self, predictions: List[torch.Tensor], targets: torch.Tensor, model: nn.Module
+        self, predictions: Any, targets: torch.Tensor, model: Any
     ):
         """
         Assign ground-truth targets to detection grid cells and anchors.
         """
+        if isinstance(predictions, tuple):
+            predictions = predictions[1]
         device = targets.device if targets.numel() > 0 else predictions[0].device
         nl = len(predictions)
-        na = model.head.na
+        head: Any = getattr(model, "head", model)
+        na: int = int(getattr(head, "na", 3))
+        head_strides = getattr(head, "strides", (8, 16, 32))
+        head_anchors = getattr(head, "anchors", None)
         nt = targets.shape[0]
 
         tcls, tbox, indices, anch = [], [], [], []
@@ -167,9 +173,21 @@ class ComputeLoss(nn.Module):
         )
 
         for i in range(nl):
-            anchors_layer = model.head.anchors[i].to(device) / model.head.strides[i]
             shape = predictions[i].shape  # (B, na, ny, nx, no)
-            gain[2:6] = torch.tensor([shape[3], shape[2], shape[3], shape[2]], device=device)
+            ny, nx = shape[2], shape[3]
+            img_size = getattr(head, "img_size", (200, 200))
+            if img_size is not None:
+                stride_x = float(img_size[0]) / nx
+                stride_y = float(img_size[1]) / ny
+            else:
+                stride_x = float(head_strides[i])
+                stride_y = float(head_strides[i])
+            stride_t = torch.tensor([stride_x, stride_y], device=device, dtype=torch.float32)
+            if head_anchors is not None:
+                anchors_layer = head_anchors[i].to(device) / stride_t
+            else:
+                anchors_layer = torch.ones((na, 2), device=device)
+            gain[2:6] = torch.tensor([nx, ny, nx, ny], device=device)
 
             t = targets_rep * gain
             if nt:

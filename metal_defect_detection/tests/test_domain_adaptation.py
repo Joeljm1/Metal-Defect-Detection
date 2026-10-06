@@ -4,20 +4,19 @@ Unit tests for GC10-DET domain adaptation and cross-dataset evaluation (Task 6).
 
 import tempfile
 from pathlib import Path
-import torch
-import numpy as np
 
-from src.models.detector import DefectDetector
+import torch
+from torch.utils.data import DataLoader
+
+from src.dataset.loader import yolo_collate_fn
 from src.evaluation.domain_adaptation import (
     GC10_CLASSES,
-    GC10Dataset,
     DomainAdaptedDetector,
-    generate_synthetic_gc10_benchmark,
+    GC10Dataset,
     evaluate_zero_shot_domain_transfer,
-    train_few_shot_adaptation,
+    generate_synthetic_gc10_benchmark,
 )
-from torch.utils.data import DataLoader
-from src.dataset.loader import yolo_collate_fn
+from src.models.detector import DefectDetector
 
 
 def test_gc10_classes_and_mapping():
@@ -43,7 +42,7 @@ def test_generate_synthetic_gc10_and_dataset():
             target_size=(200, 200),
         )
         assert len(ds) == 20
-        img, targets, path = ds[0]
+        img, targets, _path = ds[0]
         assert img.shape == (3, 200, 200)
         assert isinstance(targets, torch.Tensor)
         assert targets.shape[1] == 5 if targets.numel() > 0 else True
@@ -63,16 +62,17 @@ def test_domain_adapted_detector_architecture():
         assert p.requires_grad
 
     x = torch.randn(2, 3, 200, 200)
-    # In training mode, returns list of multi-scale raw outputs
-    out_train = adapted(x)
-    assert isinstance(out_train, list)
-    assert len(out_train) == 3
+    # Both train and eval modes return (decoded, raw) consistently
+    decoded_train, raw_train = adapted(x)
+    assert isinstance(decoded_train, torch.Tensor)
+    assert isinstance(raw_train, list)
+    assert len(raw_train) == 3
 
     # In eval mode, returns (decoded, raw)
     adapted.eval()
     out_eval = adapted(x)
     assert isinstance(out_eval, tuple)
-    decoded, raw = out_eval
+    decoded, _raw = out_eval
     # 10 classes + 5 bbox coords = 15 channels per anchor
     assert decoded.shape[-1] == 15
 

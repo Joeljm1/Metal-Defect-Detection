@@ -7,20 +7,23 @@ Evaluates:
 - Throughput in Frames Per Second (FPS) to verify Real-Time requirement (>= 30-50 FPS)
 """
 
-from typing import Dict, Any, Tuple
 import time
-import torch
-import torch.nn as nn
+from typing import Any
+
 import numpy as np
+import torch
+from torch import nn
+
+from src.utils.box_ops import non_max_suppression
 
 
 def benchmark_model(
     model: nn.Module,
-    input_size: Tuple[int, int] = (200, 200),
+    input_size: tuple[int, int] = (200, 200),
     device: str = "cuda" if torch.cuda.is_available() else "cpu",
     warmup_runs: int = 15,
     benchmark_runs: int = 100,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """
     Measures parameter counts, model memory footprint, raw model FPS,
     and true end-to-end pipeline FPS (including preprocessing if configured).
@@ -80,9 +83,23 @@ def benchmark_model(
         mean_preproc_latency = 0.0
         std_preproc_latency = 0.0
 
-    # True End-to-End Latency = Preprocessing + Model forward pass
-    mean_e2e_latency = mean_model_latency + mean_preproc_latency
-    e2e_fps = float(1000.0 / mean_e2e_latency) if mean_e2e_latency > 0 else 0.0
+    # Measure NMS postprocessing latency
+    with torch.no_grad():
+        sample_out = model(dummy_input)
+        sample_decoded = sample_out[0] if isinstance(sample_out, tuple) else sample_out
+    nms_latencies = []
+    for _ in range(benchmark_runs):
+        start = time.perf_counter()
+        _ = non_max_suppression(sample_decoded, conf_thres=0.25, iou_thres=0.45)
+        end = time.perf_counter()
+        nms_latencies.append((end - start) * 1000.0)
+
+    mean_nms_latency = float(np.mean(nms_latencies))
+    std_nms_latency = float(np.std(nms_latencies))
+
+    # True End-to-End Latency = Preprocessing + Model forward pass + NMS
+    mean_e2e_latency = mean_model_latency + mean_preproc_latency + mean_nms_latency
+    e2e_fps = float(1000.0 / max(1e-3, mean_e2e_latency))
 
     return {
         "device": str(dev),
@@ -94,6 +111,8 @@ def benchmark_model(
         "model_fps": round(model_fps, 1),
         "preproc_latency_mean_ms": round(mean_preproc_latency, 3),
         "preproc_latency_std_ms": round(std_preproc_latency, 3),
+        "nms_latency_mean_ms": round(mean_nms_latency, 3),
+        "nms_latency_std_ms": round(std_nms_latency, 3),
         "end_to_end_latency_ms": round(mean_e2e_latency, 3),
         "end_to_end_fps": round(e2e_fps, 1),
         # Aliases for backward compatibility:

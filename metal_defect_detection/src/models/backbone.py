@@ -8,16 +8,16 @@ Extracts hierarchical features at 3 detection scales:
 - P5 (stride 32): high-level semantic features with large receptive fields (rolled-in scale)
 """
 
-from typing import List, Tuple
 import torch
-import torch.nn as nn
+from torch import nn
 
 
 def autopad(k: int, p: int | None = None) -> int:
     """Pad to 'same' shape outputs."""
     if p is None:
-        p = k // 2 if isinstance(k, int) else [x // 2 for x in k]
+        return k // 2
     return p
+
 
 
 class ConvBNSiLU(nn.Module):
@@ -159,7 +159,7 @@ class CSPDarknetBackbone(nn.Module):
 
         self.out_channels = [c3, c4, c5]  # [128, 256, 512] for YOLOv5s
 
-    def forward(self, x: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    def forward(self, x: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         x = self.stem(x)
         x = self.stage1(x)
         p3 = self.stage2(x)

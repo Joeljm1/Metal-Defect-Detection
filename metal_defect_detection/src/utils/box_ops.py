@@ -2,7 +2,6 @@
 Bounding Box Operations: IoU, CIoU, and Non-Maximum Suppression (NMS).
 """
 
-from typing import List, Tuple, Optional
 import torch
 import torchvision
 
@@ -80,7 +79,7 @@ def non_max_suppression(
     conf_thres: float = 0.25,
     iou_thres: float = 0.45,
     max_det: int = 300,
-) -> List[torch.Tensor]:
+) -> list[torch.Tensor]:
     """
     Perform Non-Maximum Suppression (NMS) on inference predictions.
     
@@ -96,8 +95,7 @@ def non_max_suppression(
         with columns: [xmin, ymin, xmax, ymax, score, class_id]
     """
     bs = prediction.shape[0]
-    nc = prediction.shape[2] - 5
-    output = [torch.zeros((0, 6), device=prediction.device)] * bs
+    output = [torch.zeros((0, 6), device=prediction.device) for _ in range(bs)]
 
     for xi, x in enumerate(prediction):
         # x is (num_proposals, 5 + nc)

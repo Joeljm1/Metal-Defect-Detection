@@ -3,12 +3,11 @@ Unit tests for loss functions, box operations, NMS, and evaluation metrics.
 """
 
 import torch
-import pytest
 
-from src.utils.box_ops import box_iou, bbox_ciou, non_max_suppression
-from src.evaluation.metrics import compute_ap, evaluate_detections
-from src.training.loss import ComputeLoss
+from src.evaluation.metrics import evaluate_detections
 from src.models.detector import DefectDetector
+from src.training.loss import ComputeLoss
+from src.utils.box_ops import bbox_ciou
 
 
 def test_ciou_computation():
@@ -95,6 +94,7 @@ def test_metrics_operating_point_precision_recall():
 def test_evaluate_model_on_loader_shared_policy():
     # Smoke test for the single evaluation code path used by all scripts
     from torch.utils.data import DataLoader, TensorDataset
+
     from src.evaluation.metrics import evaluate_model_on_loader
 
     class StubDetector(torch.nn.Module):

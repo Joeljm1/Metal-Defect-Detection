@@ -10,21 +10,29 @@ Shows:
 """
 
 from pathlib import Path
-import cv2
-import numpy as np
-import matplotlib.pyplot as plt
 
+import cv2
+import matplotlib.pyplot as plt
+import numpy as np
+
+from src.dataset.parser import CLASS_NAMES, load_dataset_config, parse_yolo_label_file
 from src.preprocessing.pipeline import DefectPreprocessor
-from src.dataset.parser import CLASS_NAMES, parse_yolo_label_file
 from src.utils.visualization import draw_bounding_boxes
 
 
 def generate_preprocessing_report_figures(
-    dataset_dir: Path = Path("data/NEU-DET"),
+    dataset_dir: Path | None = None,
     output_dir: Path = Path("reports/figures"),
+    config_path: Path | None = None,
 ):
     output_dir.mkdir(parents=True, exist_ok=True)
-    preprocessor = DefectPreprocessor(use_clahe=True, use_bilateral=True)
+    if dataset_dir is None:
+        dataset_dir = Path(load_dataset_config().get("path", "data/NEU-DET"))
+    preprocessor = DefectPreprocessor.from_yaml(
+        config_path=config_path or Path("configs/preprocessing.yaml"),
+        use_clahe=True,
+        use_bilateral=True,
+    )
 
     train_img_dir = dataset_dir / "train" / "images"
     train_lbl_dir = dataset_dir / "train" / "labels"
@@ -44,7 +52,7 @@ def generate_preprocessing_report_figures(
 
     # Create a comprehensive 6-row by 5-column figure
     # Columns: Raw (with GT box), Bilateral, CLAHE, Enhanced, Sobel Edge Map
-    fig, axes = plt.subplots(len(sample_images), 5, figsize=(18, 3.2 * len(sample_images)))
+    _fig, axes = plt.subplots(len(sample_images), 5, figsize=(18, 3.2 * len(sample_images)))
 
     col_headers = [
         "1. Raw Image (+ GT Box)",
@@ -59,6 +67,8 @@ def generate_preprocessing_report_figures(
 
     for row_idx, (cls_name, img_path) in enumerate(sample_images.items()):
         img_bgr = cv2.imread(str(img_path))
+        if img_bgr is None:
+            continue
         lbl_path = train_lbl_dir / f"{img_path.stem}.txt"
         boxes = parse_yolo_label_file(lbl_path)
 

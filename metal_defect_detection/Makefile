@@ -1,4 +1,4 @@
-.PHONY: help install setup-data eda preprocess visualize test benchmark dry-run train-m1 train-m2 train-m3 train-m4 clean
+.PHONY: help install setup-data eda preprocess visualize test benchmark dashboard evaluate export-onnx gradcam gc10-eval dry-run train-m1 train-m2 train-m3 train-m4 clean
 
 PYTHON ?= uv run python
 PYTEST ?= uv run pytest
@@ -15,6 +15,11 @@ help:
 	@echo "  make visualize      - Generate side-by-side visual enhancement comparisons"
 	@echo "  make test           - Run full test suite with pytest"
 	@echo "  make benchmark      - Benchmark inference latency & FPS across M1-M4 models"
+	@echo "  make dashboard      - Launch the Streamlit Edge Defect Inspection Dashboard"
+	@echo "  make evaluate       - Run full mAP/AP evaluation on test set"
+	@echo "  make export-onnx    - Export PyTorch models to ONNX and benchmark"
+	@echo "  make gradcam        - Generate Grad-CAM explainability heatmaps"
+	@echo "  make gc10-eval      - Run cross-domain adaptation evaluation on GC10-DET"
 	@echo "  make dry-run        - Run sanity training verification on M4 model"
 	@echo "  make train-m1       - Train M1 Baseline (YOLOv5s)"
 	@echo "  make train-m2       - Train M2 Baseline + CLAHE/Bilateral Preprocessing"

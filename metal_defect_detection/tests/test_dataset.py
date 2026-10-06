@@ -3,18 +3,19 @@ Unit tests for dataset parsing, conversions, and DataLoader collation.
 """
 
 from pathlib import Path
+from typing import Any
+
+import cv2
 import numpy as np
 import torch
-import pytest
-import cv2
 
+from src.dataset.loader import create_dataloaders, yolo_collate_fn
 from src.dataset.parser import (
+    load_dataset_config,
     parse_yolo_label_file,
     xywh_to_xyxy,
     xyxy_to_xywh,
-    CLASS_NAMES,
 )
-from src.dataset.loader import yolo_collate_fn, create_dataloaders
 
 
 def test_box_conversions_roundtrip():
@@ -85,13 +86,40 @@ def test_create_dataloaders_three_way_split(tmp_path: Path):
         tmp_path, batch_size=2, num_workers=0, val_fraction=0.2, split_seed=42
     )
 
+    train_ds: Any = train_loader.dataset
+    val_ds: Any = val_loader.dataset
+    test_ds: Any = test_loader.dataset
+
     # 10 train images -> 8 train + 2 val; test split untouched
-    assert len(train_loader.dataset) == 8
-    assert len(val_loader.dataset) == 2
-    assert len(test_loader.dataset) == 4
+    assert len(train_ds) == 8
+    assert len(val_ds) == 2
+    assert len(test_ds) == 4
 
     # Train and validation partitions must be disjoint (no checkpoint-selection leak)
-    train_names = {p.name for p in train_loader.dataset.image_paths}
-    val_names = {p.name for p in val_loader.dataset.image_paths}
+    train_names = {p.name for p in train_ds.image_paths}
+    val_names = {p.name for p in val_ds.image_paths}
     assert train_names.isdisjoint(val_names)
     assert train_names | val_names == {f"train_{i:03d}.png" for i in range(10)}
+
+
+def test_load_dataset_config(tmp_path: Path):
+    # Default configs/dataset.yaml should be found
+    cfg = load_dataset_config()
+    assert cfg.get("num_classes") == 6
+    assert "crazing" in cfg.get("classes", [])
+
+    # Custom YAML should be dynamically parsed
+    custom_cfg = tmp_path / "custom_dataset.yaml"
+    custom_cfg.write_text("""
+name: "Custom-Metal"
+num_classes: 2
+classes:
+  - rust
+  - dent
+path: "data/custom"
+""")
+    loaded = load_dataset_config(custom_cfg)
+    assert loaded["name"] == "Custom-Metal"
+    assert loaded["num_classes"] == 2
+    assert loaded["classes"] == ["rust", "dent"]
+

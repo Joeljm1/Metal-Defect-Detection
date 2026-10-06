@@ -40,3 +40,15 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src"]
+
+[tool.basedpyright]
+typeCheckingMode = "basic"
+reportAny = false
+reportExplicitAny = false
+reportUnknownVariableType = false
+reportUnknownMemberType = false
+reportUnknownArgumentType = false
+reportMissingTypeStubs = false
+reportUnusedCallResult = false
+reportUnknownLambdaType = false
+

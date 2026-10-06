@@ -2,10 +2,10 @@
 Dataset Verification and Download Script for NEU-DET.
 """
 
-from pathlib import Path
 import shutil
 import subprocess
 import sys
+from pathlib import Path
 
 
 def verify_or_download_dataset(data_dir: Path = Path("data/NEU-DET")) -> bool:
@@ -50,7 +50,7 @@ def verify_or_download_dataset(data_dir: Path = Path("data/NEU-DET")) -> bool:
         shutil.copytree(temp_dir / "data" / "NEU-DET", data_dir)
         print("[SUCCESS] NEU-DET downloaded and installed.")
         return True
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001
         print(f"[ERROR] Failed to download dataset automatically: {e}", file=sys.stderr)
         return False
     finally:

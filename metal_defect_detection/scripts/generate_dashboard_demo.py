@@ -4,14 +4,12 @@ Creates a publication-quality multi-panel visualization of the plant operator in
 """
 
 from pathlib import Path
+
 import cv2
 import matplotlib.pyplot as plt
-import numpy as np
 import torch
 
-from src.models.detector import DefectDetector
 from src.deployment.dashboard import load_inspection_model, run_defect_inspection
-from src.dataset.parser import CLASS_NAMES
 
 
 def generate_dashboard_figure(
@@ -47,6 +45,8 @@ def generate_dashboard_figure(
 
     for row, (defect_type, img_path) in enumerate(selected):
         bgr = cv2.imread(str(img_path))
+        if bgr is None:
+            continue
         rgb = cv2.cvtColor(bgr, cv2.COLOR_BGR2RGB)
 
         res = run_defect_inspection(

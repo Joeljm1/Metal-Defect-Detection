@@ -4,17 +4,18 @@ Unit tests for ONNX model export and edge inference benchmarking (Task 6).
 
 import tempfile
 from pathlib import Path
-import torch
-import numpy as np
 
-from src.models.detector import DefectDetector
+import numpy as np
+import torch
+
 from src.deployment.export import (
     ExportableDetectorWrapper,
-    export_model_to_onnx,
-    create_onnx_inference_session,
-    predict_onnx,
     benchmark_edge_runtime,
+    create_onnx_inference_session,
+    export_model_to_onnx,
+    predict_onnx,
 )
+from src.models.detector import DefectDetector
 
 
 def test_exportable_wrapper():

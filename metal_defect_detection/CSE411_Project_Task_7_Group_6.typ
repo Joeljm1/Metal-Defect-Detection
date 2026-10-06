@@ -203,7 +203,7 @@ To bridge the gap between deep learning research and shop-floor manufacturing op
 
 #align(center)[
   #v(0.8cm)
-  #image("metal_defect_detection/reports/figures/dashboard_inspection_demo.png", width: 95%)
+  #image("reports/figures/dashboard_inspection_demo.png", width: 95%)
   #v(0.4em)
   #text(
     size: 8.5pt,

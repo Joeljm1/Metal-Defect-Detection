@@ -2,16 +2,17 @@
 Model Trainer for Ablation Matrix (M1 - M4).
 """
 
-from pathlib import Path
-from typing import Dict, Any, Optional
 import time
+from pathlib import Path
+from typing import Any
+
 import torch
-import torch.nn as nn
+from torch import nn
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
-from src.training.loss import ComputeLoss
 from src.models.detector import DefectDetector
+from src.training.loss import ComputeLoss
 
 
 class Trainer:
@@ -37,15 +38,30 @@ class Trainer:
         self.output_dir.mkdir(parents=True, exist_ok=True)
 
         self.compute_loss = ComputeLoss()
-        self.optimizer = torch.optim.AdamW(
-            self.model.parameters(), lr=learning_rate, weight_decay=weight_decay
-        )
+
+        # Parameter grouping: apply weight decay only to 2D+ weights (e.g. conv kernels)
+        # and not to 1D biases or normalization affine parameters.
+        decay_params = []
+        no_decay_params = []
+        for name, param in self.model.named_parameters():
+            if not param.requires_grad:
+                continue
+            if param.ndim <= 1 or name.endswith(".bias"):
+                no_decay_params.append(param)
+            else:
+                decay_params.append(param)
+
+        optim_groups = [
+            {"params": decay_params, "weight_decay": weight_decay},
+            {"params": no_decay_params, "weight_decay": 0.0},
+        ]
+        self.optimizer = torch.optim.AdamW(optim_groups, lr=learning_rate)
         self.scheduler = None  # Created in fit() with T_max aligned to the epoch count
 
         self.best_loss = float("inf")
         self.history = {"train_loss": [], "val_loss": []}
 
-    def train_epoch(self, epoch: int, dry_run: bool = False) -> Dict[str, float]:
+    def train_epoch(self, epoch: int, dry_run: bool = False) -> dict[str, float]:
         """Runs a single training epoch."""
         self.model.train()
         total_loss = 0.0
@@ -90,7 +106,7 @@ class Trainer:
             "loss_cls": total_cls / max(1, steps),
         }
 
-    def validate(self, dry_run: bool = False, epoch: Optional[int] = None) -> Dict[str, float]:
+    def validate(self, dry_run: bool = False, epoch: int | None = None) -> dict[str, float]:
         """Runs validation loss calculation in eval mode to prevent BatchNorm contamination."""
         self.model.eval()
         total_loss = 0.0
@@ -103,7 +119,7 @@ class Trainer:
 
                 preds = self.model(images)
                 raw_preds = preds[1] if isinstance(preds, tuple) else preds
-                loss, items = self.compute_loss(raw_preds, targets, self.model)
+                _loss, items = self.compute_loss(raw_preds, targets, self.model)
 
                 total_loss += items["loss_total"]
                 steps += 1
@@ -127,7 +143,7 @@ class Trainer:
         }, ckpt_path)
         return ckpt_path
 
-    def fit(self, epochs: int = 10, dry_run: bool = False) -> Dict[str, Any]:
+    def fit(self, epochs: int = 10, dry_run: bool = False) -> dict[str, Any]:
         """Trains for the specified number of epochs."""
         # Dynamically align CosineAnnealingLR cycle to total epochs
         self.scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
@@ -162,6 +178,13 @@ class Trainer:
             # Persist end-of-training weights (e.g. for ONNX export / Grad-CAM analysis)
             final_path = self.save_checkpoint(epochs, self.history["val_loss"][-1], is_best=False)
             print(f" Saved final model to {final_path}")
+
+        if not dry_run and self.best_loss < float("inf"):
+            best_path = self.output_dir / f"{self.model.variant_name}_best.pt"
+            if best_path.exists():
+                print(f"Reloading best model weights from {best_path} (best val_loss={self.best_loss:.4f})")
+                best_ckpt = torch.load(best_path, map_location=self.device)
+                self.model.load_state_dict(best_ckpt["model_state"])
 
         elapsed = time.time() - start_time
         print(f"Training completed in {elapsed:.2f}s")

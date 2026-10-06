@@ -7,7 +7,6 @@ computes histogram equalization locally, and limits contrast amplification to pr
 over-amplifying noise.
 """
 
-from typing import Tuple, Union
 import cv2
 import numpy as np
 
@@ -24,7 +23,7 @@ class CLAHEEnhancer:
     def __init__(
         self,
         clip_limit: float = 2.0,
-        tile_grid_size: Tuple[int, int] = (8, 8),
+        tile_grid_size: tuple[int, int] = (8, 8),
         color_format: str = "RGB",
     ):
         """
@@ -39,6 +38,13 @@ class CLAHEEnhancer:
         self.clahe = cv2.createCLAHE(
             clipLimit=float(clip_limit),
             tileGridSize=tuple(tile_grid_size)
+        )
+
+    def __deepcopy__(self, memo):
+        return CLAHEEnhancer(
+            clip_limit=self.clip_limit,
+            tile_grid_size=self.tile_grid_size,
+            color_format=self.color_format,
         )
 
     def apply(self, image: np.ndarray) -> np.ndarray:

@@ -1,0 +1,19 @@
+{
+  "venvPath": ".",
+  "venv": ".venv",
+  "include": [
+    "src",
+    "scripts",
+    "tests"
+  ],
+  "pythonVersion": "3.11",
+  "typeCheckingMode": "basic",
+  "reportAny": "none",
+  "reportExplicitAny": "none",
+  "reportUnknownVariableType": "none",
+  "reportUnknownMemberType": "none",
+  "reportUnknownArgumentType": "none",
+  "reportMissingTypeStubs": "none",
+  "reportUnusedCallResult": "none",
+  "reportUnknownLambdaType": "none"
+}

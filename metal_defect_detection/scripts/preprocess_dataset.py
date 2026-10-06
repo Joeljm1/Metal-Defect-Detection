@@ -7,12 +7,14 @@ Applies:
 Generates an enhanced dataset directory ready for M2 and M4 training.
 """
 
-from pathlib import Path
-import shutil
 import argparse
+import shutil
+from pathlib import Path
+
 import cv2
 from tqdm import tqdm
 
+from src.dataset.parser import load_dataset_config
 from src.preprocessing.pipeline import DefectPreprocessor
 
 
@@ -55,16 +57,21 @@ def preprocess_split(
 
 
 def main():
+    dataset_cfg = load_dataset_config()
+    default_src = dataset_cfg.get("path", "data/NEU-DET")
+    default_dst = f"{dataset_cfg.get('preprocessed_dir', 'data/preprocessed')}/NEU-DET"
+
     parser = argparse.ArgumentParser(description="Batch Preprocessing for NEU-DET")
-    parser.add_argument("--src-dir", type=str, default="data/NEU-DET", help="Source dataset path")
+    parser.add_argument("--config", type=str, default="configs/preprocessing.yaml", help="Path to preprocessing config YAML")
+    parser.add_argument("--src-dir", type=str, default=default_src, help="Source dataset path")
     parser.add_argument(
         "--dst-dir",
         type=str,
-        default="data/preprocessed/NEU-DET",
+        default=default_dst,
         help="Destination for enhanced dataset",
     )
-    parser.add_argument("--clip-limit", type=float, default=2.0, help="CLAHE clip limit")
-    parser.add_argument("--bilateral-d", type=int, default=5, help="Bilateral filter diameter")
+    parser.add_argument("--clip-limit", type=float, default=None, help="CLAHE clip limit (overrides config)")
+    parser.add_argument("--bilateral-d", type=int, default=None, help="Bilateral filter diameter (overrides config)")
     args = parser.parse_args()
 
     src = Path(args.src_dir)
@@ -74,13 +81,20 @@ def main():
     print("Executing Image Enhancement Pipeline (CLAHE + Bilateral Filtering)")
     print(f"Source: {src}")
     print(f"Target: {dst}")
+    print(f"Config: {args.config}")
     print("=" * 70)
 
-    preprocessor = DefectPreprocessor(
+    overrides = {}
+    if args.clip_limit is not None:
+        overrides["clahe_clip_limit"] = args.clip_limit
+    if args.bilateral_d is not None:
+        overrides["bilateral_diameter"] = args.bilateral_d
+
+    preprocessor = DefectPreprocessor.from_yaml(
+        config_path=args.config,
         use_clahe=True,
-        clahe_clip_limit=args.clip_limit,
         use_bilateral=True,
-        bilateral_diameter=args.bilateral_d,
+        **overrides,
     )
 
     for split in ["train", "test"]:

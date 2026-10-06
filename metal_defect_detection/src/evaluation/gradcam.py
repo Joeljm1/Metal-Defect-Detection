@@ -10,14 +10,14 @@ attribution across the P3/P4/P5 feature pyramid. Identity blocks (M1/M2,
 which carry no attention module) are skipped automatically.
 """
 
-from typing import Tuple, Optional, List, Union
-import numpy as np
 import cv2
+import numpy as np
 import torch
-import torch.nn as nn
 import torch.nn.functional as F
+from torch import nn
 
 from src.models.detector import DefectDetector
+
 
 class DefectGradCAM:
     """
@@ -27,7 +27,7 @@ class DefectGradCAM:
 
     DEFAULT_TARGET_LAYER_NAMES = ("c3_fpn2", "c3_pan1", "att_p3")
 
-    def __init__(self, model: DefectDetector, target_layer: Optional[nn.Module] = None):
+    def __init__(self, model: DefectDetector, target_layer: nn.Module | None = None):
         self.model = model.eval()
         self.device = next(model.parameters()).device
 
@@ -45,9 +45,9 @@ class DefectGradCAM:
         self.target_layer = self.target_layers[0]
 
         # Per-layer capture buffers (index-aligned with self.target_layers)
-        self.activations: List[List[torch.Tensor]] = [[] for _ in self.target_layers]
-        self.gradients: List[List[torch.Tensor]] = [[] for _ in self.target_layers]
-        self.hook_handles: List[torch.utils.hooks.RemovableHandle] = []
+        self.activations: list[list[torch.Tensor]] = [[] for _ in self.target_layers]
+        self.gradients: list[list[torch.Tensor]] = [[] for _ in self.target_layers]
+        self.hook_handles: list[torch.utils.hooks.RemovableHandle] = []
         self._register_hooks()
 
     def _register_hooks(self):
@@ -79,8 +79,8 @@ class DefectGradCAM:
     def generate_cam(
         self,
         image_tensor: torch.Tensor,
-        class_idx: Optional[int] = None,
-        target_scale: Optional[Tuple[int, int]] = None,
+        class_idx: int | None = None,
+        target_scale: tuple[int, int] | None = None,
     ) -> np.ndarray:
         """
         Generates a normalized 2D Grad-CAM heatmap for an image tensor (1, 3, H, W),

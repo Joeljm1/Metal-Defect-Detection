@@ -6,13 +6,13 @@ Integrated model maintains real-time inference throughput (>= 30-50 FPS).
 """
 
 import argparse
-from typing import Any
+
 import torch
 from rich.console import Console
 from rich.table import Table
 
-from src.models.detector import DefectDetector
 from src.evaluation.benchmark import benchmark_model
+from src.models.detector import DefectDetector
 
 
 def run_benchmark_matrix(device_name: str | None = None):
