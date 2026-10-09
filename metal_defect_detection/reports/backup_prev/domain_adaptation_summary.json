@@ -1,0 +1,323 @@
+{
+  "dataset": "GC10-DET",
+  "dataset_type": "Real Industrial Steel Strip Defect Dataset (Lv et al., 2020)",
+  "num_classes": 10,
+  "classes": [
+    "crease",
+    "crescent_gap",
+    "inclusion",
+    "oil_spot",
+    "punching_hole",
+    "rolled_pit",
+    "silk_spot",
+    "waist_folding",
+    "water_spot",
+    "welding_line"
+  ],
+  "protocol": "Linear Probe (Backbone & Neck frozen, Detection Head trained)",
+  "shots_per_class": 10,
+  "epochs": 15,
+  "seeds": [
+    42,
+    123,
+    456
+  ],
+  "models": {
+    "M1": {
+      "mean_mAP@0.5": 0.0563,
+      "std_mAP@0.5": 0.0096,
+      "mean_precision": 0.0927,
+      "std_precision": 0.014,
+      "mean_recall": 0.0221,
+      "std_recall": 0.0153,
+      "source_neu_mAP": 0.5528,
+      "domain_gap_drop": 0.4965,
+      "per_class": {
+        "crease": {
+          "mean_ap50": 0.0046,
+          "std_ap50": 0.0039
+        },
+        "crescent_gap": {
+          "mean_ap50": 0.0212,
+          "std_ap50": 0.0095
+        },
+        "inclusion": {
+          "mean_ap50": 0.0,
+          "std_ap50": 0.0
+        },
+        "oil_spot": {
+          "mean_ap50": 0.0245,
+          "std_ap50": 0.0158
+        },
+        "punching_hole": {
+          "mean_ap50": 0.4093,
+          "std_ap50": 0.1015
+        },
+        "rolled_pit": {
+          "mean_ap50": 0.0001,
+          "std_ap50": 0.0001
+        },
+        "silk_spot": {
+          "mean_ap50": 0.0271,
+          "std_ap50": 0.0076
+        },
+        "waist_folding": {
+          "mean_ap50": 0.0246,
+          "std_ap50": 0.0041
+        },
+        "water_spot": {
+          "mean_ap50": 0.0173,
+          "std_ap50": 0.0036
+        },
+        "welding_line": {
+          "mean_ap50": 0.034,
+          "std_ap50": 0.005
+        }
+      },
+      "seed_runs": [
+        {
+          "seed": 42,
+          "mAP@0.5": 0.0613,
+          "precision": 0.0757,
+          "recall": 0.0424
+        },
+        {
+          "seed": 123,
+          "mAP@0.5": 0.0647,
+          "precision": 0.0923,
+          "recall": 0.0182
+        },
+        {
+          "seed": 456,
+          "mAP@0.5": 0.0428,
+          "precision": 0.11,
+          "recall": 0.0056
+        }
+      ]
+    },
+    "M2": {
+      "mean_mAP@0.5": 0.0364,
+      "std_mAP@0.5": 0.0141,
+      "mean_precision": 0.0571,
+      "std_precision": 0.0421,
+      "mean_recall": 0.0056,
+      "std_recall": 0.004,
+      "source_neu_mAP": 0.527,
+      "domain_gap_drop": 0.4906,
+      "per_class": {
+        "crease": {
+          "mean_ap50": 0.0008,
+          "std_ap50": 0.0006
+        },
+        "crescent_gap": {
+          "mean_ap50": 0.0139,
+          "std_ap50": 0.0036
+        },
+        "inclusion": {
+          "mean_ap50": 0.0,
+          "std_ap50": 0.0
+        },
+        "oil_spot": {
+          "mean_ap50": 0.0168,
+          "std_ap50": 0.0087
+        },
+        "punching_hole": {
+          "mean_ap50": 0.248,
+          "std_ap50": 0.1105
+        },
+        "rolled_pit": {
+          "mean_ap50": 0.0008,
+          "std_ap50": 0.0007
+        },
+        "silk_spot": {
+          "mean_ap50": 0.0118,
+          "std_ap50": 0.0031
+        },
+        "waist_folding": {
+          "mean_ap50": 0.0244,
+          "std_ap50": 0.0145
+        },
+        "water_spot": {
+          "mean_ap50": 0.035,
+          "std_ap50": 0.0326
+        },
+        "welding_line": {
+          "mean_ap50": 0.012,
+          "std_ap50": 0.0051
+        }
+      },
+      "seed_runs": [
+        {
+          "seed": 42,
+          "mAP@0.5": 0.0336,
+          "precision": 0.0714,
+          "recall": 0.0076
+        },
+        {
+          "seed": 123,
+          "mAP@0.5": 0.0548,
+          "precision": 0.1,
+          "recall": 0.0091
+        },
+        {
+          "seed": 456,
+          "mAP@0.5": 0.0207,
+          "precision": 0.0,
+          "recall": 0.0
+        }
+      ]
+    },
+    "M3": {
+      "mean_mAP@0.5": 0.0419,
+      "std_mAP@0.5": 0.0032,
+      "mean_precision": 0.0287,
+      "std_precision": 0.0203,
+      "mean_recall": 0.0136,
+      "std_recall": 0.0098,
+      "source_neu_mAP": 0.5,
+      "domain_gap_drop": 0.4581,
+      "per_class": {
+        "crease": {
+          "mean_ap50": 0.0199,
+          "std_ap50": 0.0233
+        },
+        "crescent_gap": {
+          "mean_ap50": 0.0115,
+          "std_ap50": 0.0044
+        },
+        "inclusion": {
+          "mean_ap50": 0.0,
+          "std_ap50": 0.0
+        },
+        "oil_spot": {
+          "mean_ap50": 0.0059,
+          "std_ap50": 0.0032
+        },
+        "punching_hole": {
+          "mean_ap50": 0.217,
+          "std_ap50": 0.0618
+        },
+        "rolled_pit": {
+          "mean_ap50": 0.0294,
+          "std_ap50": 0.0235
+        },
+        "silk_spot": {
+          "mean_ap50": 0.0174,
+          "std_ap50": 0.0118
+        },
+        "waist_folding": {
+          "mean_ap50": 0.0483,
+          "std_ap50": 0.0162
+        },
+        "water_spot": {
+          "mean_ap50": 0.0284,
+          "std_ap50": 0.0118
+        },
+        "welding_line": {
+          "mean_ap50": 0.0416,
+          "std_ap50": 0.0042
+        }
+      },
+      "seed_runs": [
+        {
+          "seed": 42,
+          "mAP@0.5": 0.0408,
+          "precision": 0.0444,
+          "recall": 0.0182
+        },
+        {
+          "seed": 123,
+          "mAP@0.5": 0.0463,
+          "precision": 0.0,
+          "recall": 0.0
+        },
+        {
+          "seed": 456,
+          "mAP@0.5": 0.0387,
+          "precision": 0.0417,
+          "recall": 0.0227
+        }
+      ]
+    },
+    "M4": {
+      "mean_mAP@0.5": 0.0238,
+      "std_mAP@0.5": 0.0073,
+      "mean_precision": 0.0654,
+      "std_precision": 0.0316,
+      "mean_recall": 0.0172,
+      "std_recall": 0.0071,
+      "source_neu_mAP": 0.5045,
+      "domain_gap_drop": 0.4807,
+      "per_class": {
+        "crease": {
+          "mean_ap50": 0.0009,
+          "std_ap50": 0.0009
+        },
+        "crescent_gap": {
+          "mean_ap50": 0.0141,
+          "std_ap50": 0.0032
+        },
+        "inclusion": {
+          "mean_ap50": 0.0,
+          "std_ap50": 0.0
+        },
+        "oil_spot": {
+          "mean_ap50": 0.0041,
+          "std_ap50": 0.0026
+        },
+        "punching_hole": {
+          "mean_ap50": 0.1236,
+          "std_ap50": 0.0778
+        },
+        "rolled_pit": {
+          "mean_ap50": 0.0014,
+          "std_ap50": 0.0006
+        },
+        "silk_spot": {
+          "mean_ap50": 0.013,
+          "std_ap50": 0.003
+        },
+        "waist_folding": {
+          "mean_ap50": 0.0254,
+          "std_ap50": 0.0204
+        },
+        "water_spot": {
+          "mean_ap50": 0.0215,
+          "std_ap50": 0.0056
+        },
+        "welding_line": {
+          "mean_ap50": 0.0346,
+          "std_ap50": 0.0108
+        }
+      },
+      "seed_runs": [
+        {
+          "seed": 42,
+          "mAP@0.5": 0.0267,
+          "precision": 0.0533,
+          "recall": 0.0217
+        },
+        {
+          "seed": 123,
+          "mAP@0.5": 0.031,
+          "precision": 0.0341,
+          "recall": 0.0227
+        },
+        {
+          "seed": 456,
+          "mAP@0.5": 0.0138,
+          "precision": 0.1087,
+          "recall": 0.0071
+        }
+      ]
+    }
+  },
+  "hypothesis_h4_outcome": {
+    "m1_mean_map": 0.0563,
+    "m4_mean_map": 0.0238,
+    "delta_map_m4_vs_m1": -0.0324,
+    "m4_outperformed_m1": false,
+    "transfer_efficiency_m4": 4.73,
+    "transfer_efficiency_m1": 10.18
+  }
+}

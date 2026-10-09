@@ -30,7 +30,7 @@ Our team has completed **100% of the proposed project methodology**, delivering 
 | **Phase 2** | **Neural Architecture & Loss Formulation** | CSPDarknet backbone; PANet feature pyramid neck with ECA channel attention and Spatial Attention modules; multi-task CIoU bounding box regression loss; IoU-distance K-Means anchor clustering ($k=9$). | **100% Completed** |
 | **Phase 3** | **Multi-Epoch Convergence Training & Ablation** | Multi-epoch convergence training across the controlled ablation matrix (M1–M4); deterministic 3-way train/val/test data partitioning; evaluation protocol with full-curve mAP@0.5 and operating point $P/R/F1$. | **100% Completed** |
 | **Phase 4** | **Explainable AI (Grad-CAM Saliency)** | Multi-scale Grad-CAM attribution hooked into `c3_fpn2`, `c3_pan1`, and `att_p3` neck layers; 24-panel explainability gallery validating attention concentration on defect morphology. | **100% Completed** |
-| **Phase 5** | **Domain Generalization & Edge Export** | Cross-dataset domain adaptation on GC10-DET across 10 defect classes (Hypothesis H4 confirmed with $+52.0\%$ gain); ONNX model graph export; multi-format edge runtime benchmarking ($116.1$ to $183.7$ FPS). | **100% Completed** |
+| **Phase 5** | **Domain Generalization & Edge Export** | Cross-dataset domain adaptation on real GC10-DET (2,300 industrial steel images, 10 defect classes, Lv et al., 2020) via linear probe across 3 seeds; ONNX model graph export; multi-format edge runtime benchmarking ($116.1$ to $183.7$ FPS). | **100% Completed** |
 | **Phase 6** | **Interactive Inspection Web Dashboard** | Streamlit-based plant operator web application (`app.py`); live image upload; adjustable confidence/IoU sliders; side-by-side preprocessing; single-click Grad-CAM toggle; downloadable audit report. | **100% Completed** |
 
 ---
@@ -38,11 +38,11 @@ Our team has completed **100% of the proposed project methodology**, delivering 
 ## 2. Verification of Research Hypotheses
 
 | Hypothesis | Theoretical Principle | Empirical Validation & Results | Status |
-| :--- | :--- | :--- | :---: |
-| **Hypothesis H1 (Contrast Normalization)** | CLAHE on CIELAB $L$-channel and bilateral filtering normalize non-uniform factory illumination and sharpen defect boundaries. | On low-contrast directional *Scratches*, M4 doubles baseline accuracy from **12.68% to 25.87% AP** (**+104% relative gain**). | **CONFIRMED** |
-| **Hypothesis H2 (Attention Gating)** | Efficient Channel Attention (ECA) and Spatial Attention suppress steel surface reflection noise with minimal parameter overhead. | Attention modules add only **309 parameters** ($<0.005\%$ overhead), boosting *Inclusions* from **37.50% to 47.26% AP** (**+26.0% relative gain**). | **CONFIRMED** |
-| **Hypothesis H3 (Real-Time Edge Viability)** | The lightweight integrated detector sustains real-time throughput ($\ge 30-50$ FPS) on embedded edge compute. | M4 achieves **219.3 FPS** (4.56 ms latency) in PyTorch and **116.1 FPS** (8.61 ms latency) in ONNX Runtime CPU, exceeding threshold by **$>3.8\times$**. | **CONFIRMED** |
-| **Hypothesis H4 (Cross-Dataset Generalizability)** | The contrast-enhanced attention representation exhibits superior transferability to unseen manufacturing domains (GC10-DET). | Under few-shot adaptation on 10 GC10-DET defect classes, M4 achieves **17.48% mAP@0.5** vs **11.50% mAP@0.5** for M1 (**+52.0% relative gain**). | **CONFIRMED** |
+| :--- | :--- | :--- | :--- |
+| **Hypothesis H1 (Contrast Normalization)** | CLAHE on CIELAB $L$-channel and bilateral filtering normalize non-uniform factory illumination and sharpen defect boundaries. | On low-contrast directional *Scratches*, M4 achieves the highest detection accuracy, improving baseline accuracy from **20.25% to 23.27% AP** (**+14.9% relative gain**, +3.02 pp). | **CONFIRMED** |
+| **Hypothesis H2 (Attention Gating)** | Efficient Channel Attention (ECA) and Spatial Attention suppress steel surface reflection noise with minimal parameter overhead. | Attention modules add only **309 parameters** ($<0.005\%$ overhead), boosting surface pit depression (*Pitted Surface*) accuracy from **70.15% to 74.83% AP** (**+6.7% gain** in M3). | **CONFIRMED** |
+| **Hypothesis H3 (Real-Time Edge Viability)** | The lightweight integrated detector sustains real-time throughput ($\ge 30-50$ FPS) on embedded edge compute. | M4 achieves **278.9 FPS** (3.59 ms latency) in PyTorch FP32 GPU and **207.1 FPS** (4.83 ms latency) in ONNX Runtime CPU (model-only), and **155.2–192.1 FPS** end-to-end, exceeding the $\ge 30$ FPS threshold by **$>5.1\times$**. | **CONFIRMED** |
+| **Hypothesis H4 (Cross-Dataset Generalizability)** | The contrast-enhanced attention representation exhibits superior transferability to unseen manufacturing domains (GC10-DET). | Evaluated on real GC10-DET (2,300 images, 10 classes) under 10-shot linear probe transfer across 3 seeds (mean $\pm$ std). M1 baseline achieves **5.63% $\pm$ 0.96% mAP@0.5** vs M4 at **2.38% $\pm$ 0.73% mAP@0.5**. Generic baseline CNN features generalize better out-of-the-box than source-calibrated CLAHE+attention priors under severe inter-plant shift. | **REFUTED (Honest Empirical Finding)** |
 
 ---
 
@@ -52,7 +52,7 @@ To deliver a practical, deployment-ready quality control prototype for factory m
 
 ### Key Dashboard Capabilities:
 1. **Model Selection & Telemetry:** Allows operators to select between all four trained ablation models (M1 to M4) and displays live telemetry cards: total frame latency, preprocessing time, inference time, frame rate (FPS), and active hardware acceleration device.
-2. **Defect Inspection Sliders:** Real-time adjustment of detection confidence threshold ($0.05 - 0.95$) and NMS IoU threshold ($0.10 - 0.80$).
+2. **Defect Inspection Sliders:** Real-time adjustment of detection confidence threshold ($0.03 - 0.80$, default $0.10$) and NMS IoU threshold ($0.10 - 0.80$, default $0.45$).
 3. **Four-Panel Visual Inspection View:**
    - *Panel 1 (Raw Input):* Displays original metallic surface image uploaded by operator or selected from sample dataset.
    - *Panel 2 (Enhanced View):* Displays CIELAB CLAHE + Bilateral preprocessed image highlighting localized edge gradients.
@@ -102,29 +102,30 @@ Visual demonstration captured in `reports/figures/dashboard_inspection_demo.png`
 * `scripts/evaluate.py`: Standalone CLI checkpoint evaluator.
 
 ### Test Suite:
-* `tests/`: **40 passing unit and integration tests** verifying 100% of software components.
+* `tests/`: **52 passing unit and integration tests** verifying 100% of software components.
 
 ---
 
 ## 5. Automated Verification & Test Status
 
-All **40 tests pass** cleanly in `pytest`:
+All **52 tests pass** cleanly in `pytest`:
 ```bash
 uv run pytest tests/ -v
-# 40 passed, 2 warnings in 33.16s
+# 52 passed, 2 warnings in 25.43s
 ```
-Test suite breakdown:
+Test suite breakdown across all 14 modules:
 * `test_attention.py`: ECA channel & spatial attention tensor operations (3 tests)
+* `test_audit_fixes.py`: Metric alignment, coordinate conversions, and regression bounds (8 tests)
 * `test_benchmark.py`: Hardware benchmark timing and FPS validation (1 test)
 * `test_dashboard.py`: Model caching, pipeline inspection, color mapping, and report serialization (4 tests)
-* `test_dataset.py`: VOC parsing, YOLO collate, and 3-way split determinism (4 tests)
-* `test_domain_adaptation.py`: GC10 loading, remapping, and few-shot adaptation (4 tests)
+* `test_dataset.py`: VOC parsing, YOLO collate, and 3-way split determinism (5 tests)
+* `test_domain_adaptation.py`: GC10 loading, mock fixtures, few-shot sampling, VOC parsing, and linear probe adaptation (6 tests)
 * `test_evaluation_script.py`: Evaluation script execution smoke test (1 test)
 * `test_export.py`: ONNX export, session creation, and edge profiling (3 tests)
 * `test_gradcam.py`: Multi-layer hooks, CAM normalization, and JET overlays (4 tests)
 * `test_loss_metrics.py`: CIoU regression, unweighted BCE, full-curve mAP, operating $P/R$ (7 tests)
 * `test_models.py`: CSPDarknet, PANet neck, and ablation model forward graphs (3 tests)
-* `test_preprocessing.py`: CLAHE equalization, bilateral filtering, composite pipeline (3 tests)
+* `test_preprocessing.py`: CLAHE equalization, bilateral filtering, composite pipeline (4 tests)
 * `test_trainer.py`: Single step optimization and checkpointing (1 test)
 * `test_visualization.py`: Box annotation drawing utilities (2 tests)
 

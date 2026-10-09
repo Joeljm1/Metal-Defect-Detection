@@ -22,26 +22,28 @@ from src.models.detector import DefectDetector
 from src.models.head import DetectHead
 from src.training.loss import ComputeLoss
 
+from collections import defaultdict
+
 GC10_CLASSES: list[str] = [
-    "punch_hole",
-    "welding_line",
-    "crescent_gap",
-    "water_spot",
-    "oil_spot",
-    "silk_spot",
-    "inclusion",
-    "rolled_pit",
-    "crease",
-    "waist_folding",
+    "crease",          # Class 0
+    "crescent_gap",    # Class 1
+    "inclusion",       # Class 2
+    "oil_spot",        # Class 3
+    "punching_hole",   # Class 4
+    "rolled_pit",      # Class 5
+    "silk_spot",       # Class 6
+    "waist_folding",   # Class 7
+    "water_spot",      # Class 8
+    "welding_line",    # Class 9
 ]
 
-# Heuristic morphological cross-domain mapping between NEU-DET (6 source classes)
+# Exploratory morphological cross-domain mapping between NEU-DET (6 source classes)
 # and GC10-DET (10 target classes).
-# Note: Because the evaluation benchmark is synthetic (GC10-DET-Synthetic) with 10 classes,
-# this mapping serves as a geometric and textural heuristic proxy rather than a 1:1 physical
-# taxonomy (e.g. matching linear deformities to crease, indentation pits to rolled_pit).
+# Note: In real-world transfer evaluation, zero-shot mapping across disparate defect taxonomies
+# serves only as an exploratory heuristic. The authoritative cross-dataset benchmark uses
+# honest few-shot linear probing on the real GC10-DET dataset (Lv et al., 2020) without class remapping.
 NEU_TO_GC10_MAPPING: dict[str, str] = {
-    "inclusion": "inclusion",            # Exact physical defect match
+    "inclusion": "inclusion",            # Physical defect match
     "pitted_surface": "rolled_pit",      # Surface indentation / pit depressions
     "scratches": "crease",               # Linear directional surface deformities
     "patches": "water_spot",             # Surface oxidation / liquid residues
@@ -63,6 +65,7 @@ class GC10Dataset(Dataset):
         target_size: tuple[int, int] = (200, 200),
         preprocessor: Any | None = None,
         is_training: bool = False,
+        image_paths: list[Path] | None = None,
     ):
         self.image_dir = Path(image_dir)
         self.label_dir = Path(label_dir)
@@ -70,9 +73,14 @@ class GC10Dataset(Dataset):
         self.preprocessor = preprocessor
         self.is_training = is_training
 
-        self.image_paths = sorted(
-            [p for p in self.image_dir.iterdir() if p.suffix.lower() in [".jpg", ".png", ".bmp"]]
-        )
+        if image_paths is not None:
+            self.image_paths = sorted(image_paths)
+        elif self.image_dir.exists():
+            self.image_paths = sorted(
+                [p for p in self.image_dir.iterdir() if p.suffix.lower() in [".jpg", ".png", ".bmp"]]
+            )
+        else:
+            self.image_paths = []
 
     def __len__(self) -> int:
         return len(self.image_paths)
@@ -87,7 +95,10 @@ class GC10Dataset(Dataset):
         rgb = cv2.resize(rgb, self.target_size, interpolation=cv2.INTER_LINEAR)
 
         if self.preprocessor is not None:
-            rgb = self.preprocessor.process(rgb)
+            if callable(self.preprocessor):
+                rgb = self.preprocessor(rgb)
+            elif hasattr(self.preprocessor, "process"):
+                rgb = self.preprocessor.process(rgb)
 
         tensor_img = torch.from_numpy(rgb).permute(2, 0, 1).float() / 255.0
 
@@ -97,9 +108,12 @@ class GC10Dataset(Dataset):
             for line in lbl_path.read_text(encoding="utf-8").splitlines():
                 parts = line.strip().split()
                 if len(parts) >= 5:
-                    cls_id = float(parts[0])
-                    xc, yc, w, h = [float(x) for x in parts[1:5]]
-                    targets.append([cls_id, xc, yc, w, h])
+                    try:
+                        cls_id = float(parts[0])
+                        xc, yc, w, h = [float(x) for x in parts[1:5]]
+                        targets.append([cls_id, xc, yc, w, h])
+                    except ValueError:
+                        continue
 
         if len(targets) > 0:
             target_tensor = torch.tensor(targets, dtype=torch.float32)
@@ -109,16 +123,63 @@ class GC10Dataset(Dataset):
         return tensor_img, target_tensor, str(img_path)
 
 
-def generate_synthetic_gc10_benchmark(
-    base_dir: Path | str = Path("data/GC10-DET"),
+def sample_few_shot_subset(
+    image_dir: Path | str,
+    label_dir: Path | str,
+    shots_per_class: int = 10,
+    seed: int = 42,
+) -> list[Path]:
+    """
+    Deterministically samples up to N real images per defect class for few-shot adaptation.
+    Draws images containing each class to balance representation across all 10 GC10 defect types.
+    """
+    image_dir = Path(image_dir)
+    label_dir = Path(label_dir)
+    rng = random.Random(seed)
+
+    all_images = sorted(
+        [p for p in image_dir.iterdir() if p.suffix.lower() in [".jpg", ".png", ".bmp"]]
+    ) if image_dir.exists() else []
+
+    class_to_images: dict[int, list[Path]] = defaultdict(list)
+    for img_path in all_images:
+        lbl_path = label_dir / f"{img_path.stem}.txt"
+        if lbl_path.exists():
+            for line in lbl_path.read_text(encoding="utf-8").splitlines():
+                parts = line.strip().split()
+                if len(parts) >= 5:
+                    try:
+                        cls_id = int(float(parts[0]))
+                        if 0 <= cls_id < len(GC10_CLASSES):
+                            class_to_images[cls_id].append(img_path)
+                    except ValueError:
+                        continue
+
+    selected_stems = set()
+    selected_paths: list[Path] = []
+
+    for c in range(len(GC10_CLASSES)):
+        candidates = list(dict.fromkeys(class_to_images[c]))  # unique, preserve order
+        rng.shuffle(candidates)
+        picked = candidates[:shots_per_class]
+        for p in picked:
+            if p.stem not in selected_stems:
+                selected_stems.add(p.stem)
+                selected_paths.append(p)
+
+    return sorted(selected_paths)
+
+
+def create_mock_gc10_test_fixtures(
+    base_dir: Path | str = Path("data/mock_gc10_fixtures"),
     num_train_per_class: int = 20,
     num_test_per_class: int = 15,
     seed: int = 42,
 ) -> Path:
     """
-    Generates a deterministic, reproducible synthetic GC10-DET benchmark dataset
-    for cross-domain validation if external dataset is not mounted.
-    Simulates differing industrial rolling textures, illumination gradients, and defect geometries.
+    Generates lightweight synthetic mock image and label fixtures exclusively for fast,
+    isolated unit tests (e.g. tests/test_domain_adaptation.py) without requiring external
+    dataset downloads. Real cross-domain evaluations must always use data/GC10-DET.
     """
     base_dir = Path(base_dir)
     train_img_dir = base_dir / "train" / "images"
@@ -193,6 +254,10 @@ def generate_synthetic_gc10_benchmark(
                     f.writelines(f"{b[0]} {b[1]:.4f} {b[2]:.4f} {b[3]:.4f} {b[4]:.4f}\n" for b in boxes)
 
     return base_dir
+
+
+# Backward-compatible alias for unit tests and legacy fixtures
+generate_synthetic_gc10_benchmark = create_mock_gc10_test_fixtures
 
 
 class DomainAdaptedDetector(nn.Module):

@@ -1,0 +1,30 @@
+{
+  "dataset_name": "NEU-DET",
+  "total_images": 1800,
+  "total_bounding_boxes": 4189,
+  "boxes_per_image_mean": 2.3272222222222223,
+  "images_per_split": {
+    "test": 180,
+    "train": 1620
+  },
+  "boxes_per_split": {
+    "test": 446,
+    "train": 3743
+  },
+  "defect_class_distribution": {
+    "inclusion": 1011,
+    "patches": 881,
+    "crazing": 689,
+    "rolled-in_scale": 628,
+    "scratches": 548,
+    "pitted_surface": 432
+  },
+  "bbox_metrics": {
+    "mean_normalized_width": 0.3570076525211334,
+    "std_normalized_width": 0.2602137625217438,
+    "mean_normalized_height": 0.4750465452671051,
+    "std_normalized_height": 0.2826900780200958,
+    "mean_area": 0.17450471222400665,
+    "median_area": 0.11787499487400055
+  }
+}

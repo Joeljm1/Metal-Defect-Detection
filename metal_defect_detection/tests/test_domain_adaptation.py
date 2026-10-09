@@ -13,6 +13,7 @@ from src.evaluation.domain_adaptation import (
     GC10_CLASSES,
     DomainAdaptedDetector,
     GC10Dataset,
+    create_mock_gc10_test_fixtures,
     evaluate_zero_shot_domain_transfer,
     generate_synthetic_gc10_benchmark,
 )
@@ -23,11 +24,12 @@ def test_gc10_classes_and_mapping():
     assert len(GC10_CLASSES) == 10
     assert "inclusion" in GC10_CLASSES
     assert "welding_line" in GC10_CLASSES
+    assert generate_synthetic_gc10_benchmark is create_mock_gc10_test_fixtures
 
 
-def test_generate_synthetic_gc10_and_dataset():
+def test_create_mock_gc10_fixtures_and_dataset():
     with tempfile.TemporaryDirectory() as tmp_dir:
-        gc10_dir = generate_synthetic_gc10_benchmark(
+        gc10_dir = create_mock_gc10_test_fixtures(
             base_dir=tmp_dir,
             num_train_per_class=2,
             num_test_per_class=2,
@@ -95,3 +97,63 @@ def test_zero_shot_transfer_evaluation():
         assert "mAP@0.5" in metrics
         assert "mean_precision" in metrics
         assert "mean_recall" in metrics
+
+
+def test_sample_few_shot_subset():
+    from src.evaluation.domain_adaptation import sample_few_shot_subset
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        base = Path(tmp_dir)
+        img_dir = base / "images"
+        lbl_dir = base / "labels"
+        img_dir.mkdir()
+        lbl_dir.mkdir()
+
+        # Create dummy images and labels for 3 classes
+        for i in range(15):
+            img_file = img_dir / f"img_{i:03d}.jpg"
+            img_file.write_text("dummy")
+            lbl_file = lbl_dir / f"img_{i:03d}.txt"
+            cls_id = i % 3
+            lbl_file.write_text(f"{cls_id} 0.5 0.5 0.2 0.2\n")
+
+        subset_seed1 = sample_few_shot_subset(img_dir, lbl_dir, shots_per_class=2, seed=42)
+        assert len(subset_seed1) == 6  # 3 classes * 2 shots = 6 unique images
+        assert all(p.exists() for p in subset_seed1)
+
+        # Verify deterministic reproducibility
+        subset_seed1_repeat = sample_few_shot_subset(img_dir, lbl_dir, shots_per_class=2, seed=42)
+        assert subset_seed1 == subset_seed1_repeat
+
+
+def test_voc_xml_parsing():
+    from scripts.convert_gc10 import parse_voc_xml
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        xml_path = Path(tmp_dir) / "sample.xml"
+        xml_content = """<annotation>
+    <size>
+        <width>2048</width>
+        <height>1000</height>
+        <depth>3</depth>
+    </size>
+    <object>
+        <name>punching_hole</name>
+        <bndbox>
+            <xmin>100</xmin>
+            <ymin>200</ymin>
+            <xmax>300</xmax>
+            <ymax>400</ymax>
+        </bndbox>
+    </object>
+</annotation>"""
+        xml_path.write_text(xml_content)
+        boxes = parse_voc_xml(xml_path)
+        assert len(boxes) == 1
+        cls_id, xc, yc, w, h = boxes[0]
+        assert cls_id == 4  # punching_hole is Class 4
+        assert abs(xc - (200.0 / 2048.0)) < 1e-4
+        assert abs(yc - (300.0 / 1000.0)) < 1e-4
+        assert abs(w - (200.0 / 2048.0)) < 1e-4
+        assert abs(h - (200.0 / 1000.0)) < 1e-4
+

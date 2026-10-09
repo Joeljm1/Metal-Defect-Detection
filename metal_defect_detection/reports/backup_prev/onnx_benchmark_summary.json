@@ -1,0 +1,94 @@
+{
+  "M1": {
+    "variant": "M1_Baseline",
+    "input_size": [
+      200,
+      200
+    ],
+    "benchmark_runs": 100,
+    "formats": {
+      "pytorch_fp32": {
+        "mean_latency_ms": 3.23,
+        "std_latency_ms": 0.04,
+        "p95_latency_ms": 3.31,
+        "fps": 309.4,
+        "device": "cuda",
+        "model_only_latency_ms": 3.23,
+        "model_only_fps": 309.4,
+        "end_to_end_latency_ms": 4.71,
+        "end_to_end_fps": 212.4
+      },
+      "pytorch_fp16": {
+        "mean_latency_ms": 3.52,
+        "std_latency_ms": 0.06,
+        "p95_latency_ms": 3.66,
+        "fps": 284.2,
+        "device": "cuda",
+        "model_only_latency_ms": 3.52,
+        "model_only_fps": 284.2,
+        "end_to_end_latency_ms": 5.0,
+        "end_to_end_fps": 200.1
+      },
+      "onnxruntime_cpu": {
+        "mean_latency_ms": 4.27,
+        "std_latency_ms": 0.07,
+        "p95_latency_ms": 4.41,
+        "fps": 233.9,
+        "provider": "CPUExecutionProvider",
+        "model_only_latency_ms": 4.27,
+        "model_only_fps": 233.9,
+        "end_to_end_latency_ms": 5.75,
+        "end_to_end_fps": 174.0
+      }
+    },
+    "preprocessing_latency_ms": 0.0,
+    "nms_latency_ms": 1.48,
+    "model_size_onnx_mb": 0.65
+  },
+  "M4": {
+    "variant": "M4_Proposed_Integrated",
+    "input_size": [
+      200,
+      200
+    ],
+    "benchmark_runs": 100,
+    "formats": {
+      "pytorch_fp32": {
+        "mean_latency_ms": 3.65,
+        "std_latency_ms": 0.33,
+        "p95_latency_ms": 3.97,
+        "fps": 273.8,
+        "device": "cuda",
+        "model_only_latency_ms": 3.65,
+        "model_only_fps": 273.8,
+        "end_to_end_latency_ms": 5.21,
+        "end_to_end_fps": 191.8
+      },
+      "pytorch_fp16": {
+        "mean_latency_ms": 3.98,
+        "std_latency_ms": 0.07,
+        "p95_latency_ms": 4.14,
+        "fps": 251.1,
+        "device": "cuda",
+        "model_only_latency_ms": 3.98,
+        "model_only_fps": 251.1,
+        "end_to_end_latency_ms": 5.54,
+        "end_to_end_fps": 180.4
+      },
+      "onnxruntime_cpu": {
+        "mean_latency_ms": 5.18,
+        "std_latency_ms": 0.07,
+        "p95_latency_ms": 5.34,
+        "fps": 193.2,
+        "provider": "CPUExecutionProvider",
+        "model_only_latency_ms": 5.18,
+        "model_only_fps": 193.2,
+        "end_to_end_latency_ms": 6.74,
+        "end_to_end_fps": 148.3
+      }
+    },
+    "preprocessing_latency_ms": 1.0,
+    "nms_latency_ms": 0.57,
+    "model_size_onnx_mb": 0.75
+  }
+}
